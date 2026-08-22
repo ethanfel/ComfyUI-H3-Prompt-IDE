@@ -5,9 +5,9 @@ import {
     referenceFromInputName,
     tokenizePrompt,
     undoDirection,
-} from "./h3_prompt_ide_core.mjs?v=0.5.1";
-import {createPromptCompletionController} from "./h3_prompt_completion_core.mjs?v=0.5.1";
-import {repairLegacyWidgetWidth} from "./h3_legacy_widget_width.mjs?v=0.5.1";
+} from "./h3_prompt_ide_core.mjs?v=0.6.0";
+import {createPromptCompletionController} from "./h3_prompt_completion_core.mjs?v=0.6.0";
+import {repairLegacyWidgetWidth} from "./h3_legacy_widget_width.mjs?v=0.6.0";
 import {
     analyzeH3Prompt,
     effectiveH3Mode,
@@ -15,7 +15,7 @@ import {
     H3_MODES,
     h3ModeLabel,
     insertH3Section,
-} from "./h3_prompt_schema_core.mjs?v=0.5.1";
+} from "./h3_prompt_schema_core.mjs?v=0.6.0";
 
 // Standalone adaptation of the Rich Scene Prompt Editor originally authored
 // for ethanfel/ComfyUI-MiniMaxH3-Contex-Loop. Its rich reference presentation
@@ -45,6 +45,8 @@ const ICONS = Object.freeze({
     section: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5h14M5 12h14M5 19h14"/><path d="M8 3v4M12 10v4M16 17v4"/></svg>',
     flow: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h11M12 4l3 3-3 3M20 17H9M12 14l-3 3 3 3"/></svg>',
     speaker: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 10v4h4l5 4V6L8 10z"/><path d="M16 9c1.5 1.5 1.5 4.5 0 6M18.5 6.5c3 3 3 8 0 11"/></svg>',
+    lyrics: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18V6l10-2v12"/><circle cx="6" cy="18" r="3"/><circle cx="16" cy="16" r="3"/></svg>',
+    caption: '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M7 10h4M7 14h7"/></svg>',
 });
 
 function injectStyles() {
@@ -113,6 +115,8 @@ function injectStyles() {
       .h3ide-token-audio { color:var(--h3ide-audio); }
       .h3ide-token-subject { color:var(--h3ide-subject); }
       .h3ide-token-dialogue { color:var(--h3ide-dialogue); }
+      .h3ide-token-lyrics { color:var(--h3ide-dialogue); }
+      .h3ide-token-caption { color:var(--h3ide-section); }
       .h3ide-token-section { display:inline; margin:0; padding:0; border:0; border-radius:0;
         color:color-mix(in srgb,var(--h3ide-text) 82%,var(--h3ide-section)); background:none;
         font-weight:650; cursor:text; user-select:text; }

@@ -1,4 +1,7 @@
-import {H3_ALL_SECTIONS} from "./h3_prompt_schema_core.mjs?v=0.5.1";
+import {
+    H3_ALL_SECTIONS,
+    H3_MINIMAX_SPECIAL_TOKENS,
+} from "./h3_prompt_schema_core.mjs?v=0.6.0";
 
 export const H3_PICTURE_LIMIT = 9;
 export const H3_VIDEO_LIMIT = 3;
@@ -56,7 +59,7 @@ export function pictureOrdinalFromInputName(name) {
 
 const SECTION_ALTERNATION = H3_ALL_SECTIONS.join("|");
 const TOKEN_PATTERN = new RegExp(
-    `^(${SECTION_ALTERNATION}):|(<(?:Picture|Video|Audio|Subject)\\s+\\d+>|<\\/?d>|<scenetrans>|<cutoff>|\\(S\\d+(?:,S\\d+)*\\))`,
+    `^(${SECTION_ALTERNATION}):|(<(?:Picture|Video|Audio|Subject)\\s+\\d+>|<\\/?d>|<\\|(?:cutoff|lyrics_start|lyrics_end|caption_start|caption_end)\\|>|<scenetrans>|<cutoff>|\\(S\\d+(?:,S\\d+)*\\))`,
     "gim",
 );
 
@@ -90,6 +93,9 @@ export function tokenizePrompt(value, connectedReferences = []) {
         const section = tag.endsWith(":")
             ? H3_ALL_SECTIONS.find((item) => `${item}:` === tag) : null;
         const externalReference = tag.match(/^<(picture|video|audio)\s+(\d+)>$/);
+        const specialToken = H3_MINIMAX_SPECIAL_TOKENS.find(
+            (token) => token.toLowerCase() === tag,
+        );
         if (section) {
             parts.push({type:"section", kind:"section", text, section,
                 unresolved:text !== `${section}:`});
@@ -105,12 +111,20 @@ export function tokenizePrompt(value, connectedReferences = []) {
             });
         } else if (tag.startsWith("<subject")) {
             parts.push({type: "subject", kind: "subject", text, unresolved: false});
-        } else if (tag === "<scenetrans>" || tag === "<cutoff>") {
-            parts.push({type:"flow", kind:"flow", text, unresolved:false});
+        } else if (["<scenetrans>", "<cutoff>", "<|cutoff|>"].includes(tag)) {
+            parts.push({type:"flow", kind:"flow", text,
+                unresolved:specialToken ? text !== specialToken : false});
+        } else if (tag.startsWith("<|lyrics_")) {
+            parts.push({type:"lyrics", kind:"lyrics", text,
+                unresolved:text !== specialToken});
+        } else if (tag.startsWith("<|caption_")) {
+            parts.push({type:"caption", kind:"caption", text,
+                unresolved:text !== specialToken});
         } else if (tag.startsWith("(s")) {
             parts.push({type:"speaker", kind:"speaker", text, unresolved:false});
         } else {
-            parts.push({type: "dialogue", kind: "dialogue", text, unresolved: false});
+            parts.push({type:"dialogue", kind:"dialogue", text,
+                unresolved:specialToken ? text !== specialToken : false});
         }
         offset = index + text.length;
     }

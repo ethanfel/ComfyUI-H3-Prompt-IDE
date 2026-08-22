@@ -10,6 +10,7 @@ import {
     undoDirection,
     videoToken,
 } from "../web/h3_prompt_ide_core.mjs";
+import {H3_MINIMAX_SPECIAL_TOKENS} from "../web/h3_prompt_schema_core.mjs";
 
 assert.equal(pictureToken(1), "<Picture 1>");
 assert.equal(pictureToken(9), "<Picture 9>");
@@ -53,12 +54,25 @@ assert.equal(parts.filter((part) => part.type === "dialogue").length, 2);
 assert.deepEqual(tokenizePrompt("Use @hero", [1]), [{type:"text", text:"Use @hero"}]);
 
 const h3Syntax = tokenizePrompt(
-    "subject_definitions:\n<Subject 1> (S1) says <d>[English] Hi<scenetrans> there<cutoff></d>",
+    "subject_definitions:\n<Subject 1> (S1) says <d>[English] Hi<scenetrans> there<|cutoff|></d>",
     [],
 ).filter((part) => part.type !== "text");
 assert.deepEqual(h3Syntax.map((part) => part.type), [
     "section", "subject", "speaker", "dialogue", "flow", "flow", "dialogue",
 ]);
+
+const specialSyntax = tokenizePrompt(H3_MINIMAX_SPECIAL_TOKENS.join(" "))
+    .filter((part) => part.type !== "text");
+assert.deepEqual(specialSyntax.map((part) => [part.text, part.kind, part.unresolved]), [
+    ["<d>", "dialogue", false],
+    ["</d>", "dialogue", false],
+    ["<|cutoff|>", "flow", false],
+    ["<|lyrics_start|>", "lyrics", false],
+    ["<|lyrics_end|>", "lyrics", false],
+    ["<|caption_start|>", "caption", false],
+    ["<|caption_end|>", "caption", false],
+]);
+assert.equal(tokenizePrompt("<|Lyrics_start|>")[0].unresolved, true);
 
 const history = new PromptUndoHistory("a");
 history.record("ab", {inputType: "insertText", now: 1});

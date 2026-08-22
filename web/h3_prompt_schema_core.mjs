@@ -17,6 +17,18 @@ export const H3_ALL_SECTIONS = Object.freeze([
     ...new Set([...H3_BASE_SECTIONS, ...H3_REFERENCE_SECTIONS]),
 ]);
 
+// Exact case-sensitive tokens registered by MiniMax-H3's tokenizer_config and
+// by ComfyUI PR #15808. Keep this order aligned with tokenizer ids 151669–151675.
+export const H3_MINIMAX_SPECIAL_TOKENS = Object.freeze([
+    "<d>",
+    "</d>",
+    "<|cutoff|>",
+    "<|lyrics_start|>",
+    "<|lyrics_end|>",
+    "<|caption_start|>",
+    "<|caption_end|>",
+]);
+
 export const H3_MODES = Object.freeze([
     {id:"auto", label:"Auto schema"},
     {id:"t2va", label:"T2VA"},
@@ -240,10 +252,51 @@ function analyzeDialogue(text, problems) {
             problems.push({severity:"warning", code:"language", message:"Each <d> span should begin with a [Language] marker"});
         }
     }
-    for (const match of String(text ?? "").matchAll(/<(?:scenetrans|cutoff)>/gi)) {
+    for (const match of String(text ?? "").matchAll(/<(?:scenetrans|cutoff)>|<\|cutoff\|>/gi)) {
         const position = match.index ?? 0;
         if (!ranges.some(([start, end]) => start < position && position < end)) {
             problems.push({severity:"error", code:"dialogue_flow", message:`${match[0]} must be inside a <d> dialogue span`});
+        }
+    }
+    if (/<cutoff>/i.test(String(text ?? ""))) {
+        problems.push({severity:"warning", code:"legacy_token",
+            message:"Use tokenizer-native <|cutoff|> instead of legacy <cutoff>"});
+    }
+}
+
+function analyzeMiniMaxSpecialTokens(text, problems) {
+    const source = String(text ?? "");
+    const pattern = /<\/?d>|<\|(?:cutoff|lyrics_start|lyrics_end|caption_start|caption_end)\|>/gi;
+    for (const match of source.matchAll(pattern)) {
+        const canonical = H3_MINIMAX_SPECIAL_TOKENS.find(
+            (token) => token.toLowerCase() === match[0].toLowerCase(),
+        );
+        if (canonical && match[0] !== canonical) {
+            problems.push({severity:"error", code:"special_token",
+                message:`Use exact case-sensitive MiniMax token ${canonical}`});
+        }
+    }
+
+    for (const pair of [
+        ["lyrics", "<|lyrics_start|>", "<|lyrics_end|>"],
+        ["caption", "<|caption_start|>", "<|caption_end|>"],
+    ]) {
+        const [kind, start, end] = pair;
+        const boundaryPattern = kind === "lyrics"
+            ? /<\|lyrics_(?:start|end)\|>/g
+            : /<\|caption_(?:start|end)\|>/g;
+        let open = false;
+        let invalid = false;
+        for (const match of source.matchAll(boundaryPattern)) {
+            if (match[0] === start) {
+                if (open) invalid = true;
+                open = true;
+            } else if (!open) invalid = true;
+            else open = false;
+        }
+        if (open || invalid) {
+            problems.push({severity:"error", code:"special_pair",
+                message:`Balance ${start} with ${end} in presentation order`});
         }
     }
 }
@@ -323,6 +376,7 @@ export function analyzeH3Prompt(value, selectedMode = "auto", options = {}) {
     if (openDialogue !== closeDialogue) {
         problems.push({severity:"error", code:"dialogue", message:"Unbalanced <d> and </d> dialogue tags"});
     }
+    analyzeMiniMaxSpecialTokens(text, problems);
     analyzeDialogue(text, problems);
 
     if (mode === "ref2va") {

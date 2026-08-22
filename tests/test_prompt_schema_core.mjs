@@ -4,6 +4,7 @@ import {
     detectH3Mode,
     ensureH3Structure,
     H3_BASE_SECTIONS,
+    H3_MINIMAX_SPECIAL_TOKENS,
     H3_REFERENCE_SECTIONS,
     h3AlignmentInstruction,
     insertH3Section,
@@ -78,6 +79,27 @@ assert.ok(analyzeH3Prompt(`${base}\n<d>Hello</d>`, "t2va")
     .problems.some((item) => item.code === "language"));
 assert.ok(analyzeH3Prompt(`${base}\n<scenetrans>`, "t2va")
     .problems.some((item) => item.code === "dialogue_flow"));
+
+assert.deepEqual(H3_MINIMAX_SPECIAL_TOKENS, [
+    "<d>", "</d>", "<|cutoff|>", "<|lyrics_start|>",
+    "<|lyrics_end|>", "<|caption_start|>", "<|caption_end|>",
+]);
+const supportedSpecialSyntax = `${base}
+<d>[English] Stop here<|cutoff|></d>
+<|lyrics_start|>A lyric line<|lyrics_end|>
+<|caption_start|>A caption<|caption_end|>`;
+assert.equal(analyzeH3Prompt(supportedSpecialSyntax, "t2va").problems
+    .filter((item) => ["special_token", "special_pair", "dialogue_flow"].includes(item.code)).length, 0);
+assert.ok(analyzeH3Prompt(`${base}\n<|cutoff|>`, "t2va")
+    .problems.some((item) => item.code === "dialogue_flow"));
+assert.ok(analyzeH3Prompt(`${base}\n<|lyrics_start|>open`, "t2va")
+    .problems.some((item) => item.code === "special_pair"));
+assert.ok(analyzeH3Prompt(`${base}\n<|caption_end|>`, "t2va")
+    .problems.some((item) => item.code === "special_pair"));
+assert.ok(analyzeH3Prompt(`${base}\n<|Lyrics_start|>bad case<|lyrics_end|>`, "t2va")
+    .problems.some((item) => item.code === "special_token"));
+assert.ok(analyzeH3Prompt(`${base}\n<d>[English] legacy<cutoff></d>`, "t2va")
+    .problems.some((item) => item.code === "legacy_token"));
 
 const mediaReferences = `${base}\n<Picture 1> <Video 1> <Audio 1>`;
 assert.equal(analyzeH3Prompt(mediaReferences, "t2va", {

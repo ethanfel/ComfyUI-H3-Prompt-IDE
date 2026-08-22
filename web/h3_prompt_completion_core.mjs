@@ -1,15 +1,26 @@
 import {
     H3_ALL_SECTIONS,
+    H3_MINIMAX_SPECIAL_TOKENS,
     H3_TASK_DIRECTIVES,
     effectiveH3Mode,
     h3SectionsForMode,
-} from "./h3_prompt_schema_core.mjs?v=0.5.1";
+} from "./h3_prompt_schema_core.mjs?v=0.6.0";
 
 export const H3_LANGUAGE_MARKERS = Object.freeze([
     "[English]", "[French]", "[Spanish]", "[German]", "[Italian]",
     "[Portuguese]", "[Chinese]", "[Japanese]", "[Korean]", "[Arabic]",
     "[unclear]",
 ]);
+
+const [
+    DIALOGUE_START,
+    DIALOGUE_END,
+    CUTOFF_TOKEN,
+    LYRICS_START,
+    LYRICS_END,
+    CAPTION_START,
+    CAPTION_END,
+] = H3_MINIMAX_SPECIAL_TOKENS;
 
 function clampedCaret(text, caret) {
     const number = Number(caret);
@@ -47,8 +58,9 @@ export function promptCompletionQuery(value, caret, {manual = false} = {}) {
 }
 
 function normalizedSearch(value) {
-    return String(value ?? "").toLowerCase().replace(/^[<\[(]/, "")
-        .replace(/[>\])]$/, "").replace(/[_+:-]+/g, " ")
+    return String(value ?? "").toLowerCase().replace(/^<\|?/, "")
+        .replace(/\|?>$/, "").replace(/^[\[(]/, "").replace(/[\])]$/, "")
+        .replace(/[|_+:-]+/g, " ").replace(/…/g, " ")
         .replace(/\s+/g, " ").trim();
 }
 
@@ -86,10 +98,27 @@ function referenceItems(records) {
         items.push({kind:"audio", label:`<Audio ${index}>`, insertText:`<Audio ${index}>`, detail:"H3 reference audio label", priority:50 + index});
     }
     items.push(
-        {kind:"dialogue", label:"<d>…</d>", insertText:"<d></d>", filterText:"d dialogue", detail:"H3 dialogue or lyric span", caretOffset:3, priority:60},
+        {kind:"dialogue", label:"<d>…</d>", insertText:`${DIALOGUE_START}${DIALOGUE_END}`, filterText:"d dialogue", detail:"H3 dialogue or lyric span", caretOffset:DIALOGUE_START.length, priority:60},
         {kind:"flow", label:"<scenetrans>", insertText:"<scenetrans>", detail:"Dialogue continues across a shot transition", priority:61},
-        {kind:"flow", label:"<cutoff>", insertText:"<cutoff>", detail:"Speech is truncated by the video ending", priority:62},
-        {kind:"dialogue", label:"</d>", insertText:"</d>", filterText:"/d close dialogue", detail:"Close an H3 dialogue span", priority:63},
+        {kind:"flow", label:CUTOFF_TOKEN, insertText:CUTOFF_TOKEN, filterText:"cutoff speech end", detail:"Tokenizer-native speech cutoff marker", priority:62},
+        {kind:"dialogue", label:DIALOGUE_START, insertText:DIALOGUE_START, filterText:"d open dialogue", detail:"Open an H3 dialogue span", priority:63},
+        {kind:"dialogue", label:DIALOGUE_END, insertText:DIALOGUE_END, filterText:"/d close dialogue", detail:"Close an H3 dialogue span", priority:64},
+        {kind:"lyrics", label:`${LYRICS_START}…${LYRICS_END}`,
+            insertText:`${LYRICS_START}${LYRICS_END}`,
+            filterText:"lyrics lyric song pair", detail:"Paired MiniMax lyric boundaries",
+            caretOffset:LYRICS_START.length, priority:65},
+        {kind:"lyrics", label:LYRICS_START, insertText:LYRICS_START,
+            filterText:"lyrics start", detail:"Open a MiniMax lyric boundary", priority:66},
+        {kind:"lyrics", label:LYRICS_END, insertText:LYRICS_END,
+            filterText:"lyrics end", detail:"Close a MiniMax lyric boundary", priority:67},
+        {kind:"caption", label:`${CAPTION_START}…${CAPTION_END}`,
+            insertText:`${CAPTION_START}${CAPTION_END}`,
+            filterText:"caption description pair", detail:"Paired MiniMax caption boundaries",
+            caretOffset:CAPTION_START.length, priority:68},
+        {kind:"caption", label:CAPTION_START, insertText:CAPTION_START,
+            filterText:"caption start", detail:"Open a MiniMax caption boundary", priority:69},
+        {kind:"caption", label:CAPTION_END, insertText:CAPTION_END,
+            filterText:"caption end", detail:"Close a MiniMax caption boundary", priority:70},
     );
     return items;
 }

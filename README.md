@@ -31,6 +31,14 @@ Restart ComfyUI, then find the nodes under **text → H3 Prompt IDE**.
 
 Reference associations use H3's native `<Picture 1>`, `<Video 1>`, and `<Audio 1>` naming. Audio labels must follow native presentation order: connected video soundtracks first, then standalone audio. This standalone editor intentionally does not include Motion Context `@tag` or `@@@@tag` compilation.
 
+The editor also completes, highlights, and validates MiniMax H3's exact
+case-sensitive tokenizer tokens: `<d>`, `</d>`, `<|cutoff|>`,
+`<|lyrics_start|>`, `<|lyrics_end|>`, `<|caption_start|>`, and
+`<|caption_end|>`. Correct single-token encoding requires a ComfyUI build with
+[PR #15808](https://github.com/Comfy-Org/ComfyUI/pull/15808) or its merged
+equivalent. Existing `<cutoff>` text remains readable, but the IDE recommends
+the tokenizer-native `<|cutoff|>` form.
+
 Requires a current ComfyUI version with the V3 node API and `Autogrow` support.
 
 The editor includes a scoped workaround for the recurring [LiteGraph widget-width bug](https://github.com/Comfy-Org/ComfyUI_frontend/issues/12443), so it resizes correctly without a separate repair node.

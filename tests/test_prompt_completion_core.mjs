@@ -4,6 +4,7 @@ import {
     promptCompletionItems,
     promptCompletionQuery,
 } from "../web/h3_prompt_completion_core.mjs";
+import {H3_MINIMAX_SPECIAL_TOKENS} from "../web/h3_prompt_schema_core.mjs";
 
 const records = [
     {kind:"picture", token:"<Picture 1>", ordinal:1},
@@ -29,7 +30,15 @@ assert.match(promptCompletionItems(promptCompletionQuery("<Aud", 4), records)[0]
 assert.ok(promptCompletionItems(promptCompletionQuery("<sce", 4), records)
     .some((item) => item.label === "<scenetrans>"));
 assert.ok(promptCompletionItems(promptCompletionQuery("<cut", 4), records)
-    .some((item) => item.label === "<cutoff>"));
+    .some((item) => item.label === "<|cutoff|>"));
+const lyricsQuery = promptCompletionQuery("<|lyr", "<|lyr".length);
+const lyricsPair = promptCompletionItems(lyricsQuery, records)[0];
+assert.equal(lyricsPair.label, "<|lyrics_start|>…<|lyrics_end|>");
+assert.equal(applyPromptCompletion("<|lyr", lyricsQuery, lyricsPair).caret,
+    "<|lyrics_start|>".length);
+assert.ok(promptCompletionItems(
+    promptCompletionQuery("<|cap", "<|cap".length), records,
+).some((item) => item.label === "<|caption_start|>…<|caption_end|>"));
 assert.ok(promptCompletionItems(promptCompletionQuery("[key", 4), records)
     .some((item) => item.label === "[keyframe completion]"));
 assert.equal(promptCompletionItems(promptCompletionQuery("(S2", 3), records)[0].label, "(S2)");
@@ -55,5 +64,8 @@ assert.ok(manual.some((item) => item.label === "integrated_multimodal_descriptio
 assert.ok(manual.some((item) => item.label === "[English]"));
 assert.ok(manual.some((item) => item.label === "[unclear]"));
 assert.ok(manual.some((item) => item.label === "(S1)"));
+for (const token of H3_MINIMAX_SPECIAL_TOKENS) {
+    assert.ok(manual.some((item) => item.insertText.includes(token)), `Missing ${token}`);
+}
 
 console.log("H3 standalone completion tests passed");
