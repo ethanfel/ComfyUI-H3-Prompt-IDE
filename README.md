@@ -33,6 +33,8 @@ Reference associations use H3's native `<Picture 1>`, `<Video 1>`, and `<Audio 1
 
 Requires a current ComfyUI version with the V3 node API and `Autogrow` support.
 
+The editor includes a scoped workaround for the recurring [LiteGraph widget-width bug](https://github.com/Comfy-Org/ComfyUI_frontend/issues/12443), so it resizes correctly without a separate repair node.
+
 ## License
 
 [MIT](LICENSE)

@@ -70,6 +70,7 @@ assert.equal(undoDirection({ctrlKey: true, metaKey: false, altKey: false, shiftK
 
 const source = fs.readFileSync(new URL("../web/h3_prompt_ide.js", import.meta.url), "utf8");
 assert.match(source, /createPromptCompletionController/);
+assert.match(source, /repairLegacyWidgetWidth\(domWidget\)/);
 assert.match(source, /analyzeH3Prompt/);
 assert.match(source, /ensureH3Structure/);
 assert.match(source, /"Sections"/);

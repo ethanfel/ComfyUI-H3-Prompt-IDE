@@ -5,8 +5,9 @@ import {
     referenceFromInputName,
     tokenizePrompt,
     undoDirection,
-} from "./h3_prompt_ide_core.mjs?v=0.4.0";
-import {createPromptCompletionController} from "./h3_prompt_completion_core.mjs?v=0.4.0";
+} from "./h3_prompt_ide_core.mjs?v=0.5.0";
+import {createPromptCompletionController} from "./h3_prompt_completion_core.mjs?v=0.5.0";
+import {repairLegacyWidgetWidth} from "./h3_legacy_widget_width.mjs?v=0.5.0";
 import {
     analyzeH3Prompt,
     effectiveH3Mode,
@@ -14,7 +15,7 @@ import {
     H3_MODES,
     h3ModeLabel,
     insertH3Section,
-} from "./h3_prompt_schema_core.mjs?v=0.4.0";
+} from "./h3_prompt_schema_core.mjs?v=0.5.0";
 
 const EDITOR_NODE = "H3PromptIDE";
 const REFERENCES_NODE = "H3PromptReferenceInputs";
@@ -996,6 +997,7 @@ function mountEditor(node) {
         "h3_prompt_ide_editor", "h3-prompt-ide", root,
         {serialize:false, hideOnZoom:false, getMinHeight:() => 500},
     );
+    repairLegacyWidgetWidth(domWidget);
     domWidget.serialize = false;
     node.setSize?.([
         Math.max(Number(node.size?.[0]) || 700, 700),
@@ -1016,11 +1018,13 @@ function mountEditor(node) {
         return removed?.apply(this, arguments);
     };
     node._h3PromptIdeRefresh = () => {
+        repairLegacyWidgetWidth(domWidget);
         hidePromptWidget(promptWidget);
         synchronizeWidget();
         refreshReferences(true);
     };
     state.pollTimer = window.setInterval(() => {
+        repairLegacyWidgetWidth(domWidget);
         synchronizeWidget();
         refreshReferences(false);
     }, 500);
