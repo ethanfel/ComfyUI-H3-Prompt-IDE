@@ -13,7 +13,7 @@ cd ComfyUI/custom_nodes
 git clone https://github.com/ethanfel/ComfyUI-H3-Prompt-IDE.git
 ```
 
-Restart ComfyUI, then find the nodes under **H3**.
+Restart ComfyUI, then find the nodes under **text → H3 Prompt IDE**.
 
 ## Use
 
