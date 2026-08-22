@@ -35,6 +35,24 @@ Requires a current ComfyUI version with the V3 node API and `Autogrow` support.
 
 The editor includes a scoped workaround for the recurring [LiteGraph widget-width bug](https://github.com/Comfy-Org/ComfyUI_frontend/issues/12443), so it resizes correctly without a separate repair node.
 
+## Credits
+
+H3 Prompt IDE is a standalone adaptation of the Rich Scene Prompt Editor
+originally developed for
+[ComfyUI-MiniMaxH3-Contex-Loop](https://github.com/ethanfel/ComfyUI-MiniMaxH3-Contex-Loop/tree/feature/0.5-workflow-ux).
+The Motion Context-specific plan, history, optimizer, `@tag`, and `@@@@tag`
+integration was removed here to provide a normal text-output node.
+
+The rich reference presentation, media miniatures, quick-reference interaction,
+and compact authoring layout were inspired by
+[ComfyUI-MiniMaxH3-Easy](https://github.com/nkxx188/ComfyUI-MiniMaxH3-Easy)
+by **nkxx188**. The standalone H3 schema, graph-aware native reference labels,
+diagnostics, and plain `STRING` interface are implemented in this project.
+
+The scoped widget-width compatibility repair is adapted with permission from
+[ComfyUI-LegacyWidgetWidthFix](https://github.com/pekkAi-dev/ComfyUI-LegacyWidgetWidthFix)
+by **pekkAi-dev**.
+
 ## License
 
 [GNU GPL v3](LICENSE)

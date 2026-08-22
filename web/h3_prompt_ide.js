@@ -17,6 +17,11 @@ import {
     insertH3Section,
 } from "./h3_prompt_schema_core.mjs?v=0.5.1";
 
+// Standalone adaptation of the Rich Scene Prompt Editor originally authored
+// for ethanfel/ComfyUI-MiniMaxH3-Contex-Loop. Its rich reference presentation
+// and compact authoring interactions were inspired by
+// nkxx188/ComfyUI-MiniMaxH3-Easy (MIT).
+
 const EDITOR_NODE = "H3PromptIDE";
 const REFERENCES_NODE = "H3PromptReferenceInputs";
 const FONT_PROPERTY = "h3_prompt_ide_font_size";
