@@ -1,0 +1,121 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="640" viewBox="0 0 1280 640" role="img" aria-labelledby="title description">
+  <title id="title">H3 Prompt IDE for ComfyUI</title>
+  <desc id="description">A VS Code-inspired H3 prompt editor interface with strict categories and Picture reference tokens.</desc>
+  <defs>
+    <linearGradient id="canvas" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#11151d"/>
+      <stop offset="0.56" stop-color="#0d1117"/>
+      <stop offset="1" stop-color="#090b10"/>
+    </linearGradient>
+    <linearGradient id="h3" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#35bfff"/>
+      <stop offset="1" stop-color="#8c73ff"/>
+    </linearGradient>
+    <linearGradient id="line" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#20aaf2"/>
+      <stop offset="1" stop-color="#806cff"/>
+    </linearGradient>
+    <filter id="panelShadow" x="-20%" y="-30%" width="150%" height="170%" color-interpolation-filters="sRGB">
+      <feGaussianBlur in="SourceAlpha" stdDeviation="26" result="blur"/>
+      <feOffset in="blur" dx="0" dy="22" result="offset"/>
+      <feColorMatrix in="offset" type="matrix" values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 .5 0" result="shadowColor"/>
+      <feMerge>
+        <feMergeNode in="shadowColor"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+    <filter id="glow" x="-100%" y="-100%" width="300%" height="300%">
+      <feGaussianBlur stdDeviation="44"/>
+    </filter>
+  </defs>
+
+  <rect width="1280" height="640" fill="url(#canvas)"/>
+  <circle cx="1155" cy="80" r="190" fill="#1a95d1" opacity="0.16" filter="url(#glow)"/>
+  <circle cx="1050" cy="590" r="230" fill="#745bff" opacity="0.13" filter="url(#glow)"/>
+  <path d="M0 548 654 300l626 102v238H0Z" fill="#137cb2" opacity="0.045"/>
+  <path d="M68 90h456" stroke="url(#line)" stroke-width="4" stroke-linecap="round"/>
+
+  <g font-family="Inter, Segoe UI, sans-serif">
+    <g transform="translate(68 142)">
+      <path d="M0 4h22v12H12v45h10v12H0Z" fill="#25b1f6"/>
+      <text x="37" y="69" fill="url(#h3)" font-size="88" font-weight="800" letter-spacing="-5">H3</text>
+      <path d="M161 4h22v69h-22V61h10V16h-10Z" fill="#8871ff"/>
+    </g>
+    <text x="68" y="282" fill="#f1f5f9" font-size="54" font-weight="750" letter-spacing="-1">PROMPT IDE</text>
+    <text x="70" y="329" fill="#9da8b6" font-size="23" font-weight="450">Rich H3 authoring for ComfyUI</text>
+
+    <g transform="translate(70 386)">
+      <rect width="142" height="38" rx="19" fill="#123c52" stroke="#1a83b8"/>
+      <circle cx="22" cy="19" r="5" fill="#46c8ff"/>
+      <text x="38" y="25" fill="#9ee2ff" font-size="17" font-weight="600">H3 completion</text>
+      <rect x="154" width="128" height="38" rx="19" fill="#2f254c" stroke="#6650a8"/>
+      <circle cx="176" cy="19" r="5" fill="#a98cff"/>
+      <text x="192" y="25" fill="#d5c8ff" font-size="17" font-weight="600">Strict modes</text>
+      <rect y="52" width="128" height="38" rx="19" fill="#163a2e" stroke="#28745a"/>
+      <circle cx="22" cy="71" r="5" fill="#3ed598"/>
+      <text x="38" y="77" fill="#a1e8c9" font-size="17" font-weight="600">Plain text out</text>
+      <rect x="140" y="52" width="168" height="38" rx="19" fill="#402b1e" stroke="#8d603c"/>
+      <circle cx="162" cy="71" r="5" fill="#e8a468"/>
+      <text x="178" y="77" fill="#f1c99f" font-size="17" font-weight="600">Picture previews</text>
+    </g>
+    <text x="70" y="543" fill="#687382" font-size="17" font-family="SFMono-Regular, Consolas, monospace">T2VA · I2VA · FL2VA · L2VA · Ref2VA</text>
+  </g>
+
+  <g transform="translate(566 70)" filter="url(#panelShadow)">
+    <rect width="646" height="500" rx="18" fill="#171a21" stroke="#343a46" stroke-width="2"/>
+    <path d="M18 0h610a18 18 0 0 1 18 18v44H0V18A18 18 0 0 1 18 0Z" fill="#242832"/>
+    <circle cx="27" cy="31" r="7" fill="#ff6259"/>
+    <circle cx="49" cy="31" r="7" fill="#ffbd2e"/>
+    <circle cx="71" cy="31" r="7" fill="#28c840"/>
+    <rect x="212" y="14" width="225" height="34" rx="8" fill="#1b1e25"/>
+    <path d="M229 23h15l7 8-7 8h-15l-7-8Z" fill="#28aff1"/>
+    <text x="263" y="37" fill="#c9d1da" font-family="Inter, Segoe UI, sans-serif" font-size="16" font-weight="600">prompt.h3</text>
+
+    <rect y="62" width="58" height="438" fill="#20242c"/>
+    <rect y="89" width="3" height="47" rx="1.5" fill="#22a9f2"/>
+    <g fill="none" stroke="#8d96a3" stroke-width="5" stroke-linecap="round" stroke-linejoin="round">
+      <path d="m18 101 11-8 11 8v18l-11 8-11-8Z"/>
+      <path d="M17 162h24M17 173h24M17 184h16"/>
+      <rect x="17" y="220" width="24" height="24" rx="4"/>
+      <path d="M19 293h20M29 283v20"/>
+    </g>
+
+    <rect x="58" y="62" width="588" height="438" fill="#15181e"/>
+    <rect x="58" y="62" width="588" height="37" fill="#1b1e25"/>
+    <path d="M76 75h14l6 6-6 6H76l-6-6Z" fill="#25acef"/>
+    <text x="105" y="86" fill="#c6ced8" font-family="Inter, Segoe UI, sans-serif" font-size="14">H3 Prompt IDE</text>
+    <rect x="538" y="70" width="87" height="22" rx="11" fill="#193d30"/>
+    <circle cx="553" cy="81" r="4" fill="#3ed598"/>
+    <text x="564" y="86" fill="#8ee8bf" font-family="Inter, Segoe UI, sans-serif" font-size="12" font-weight="600">H3 valid</text>
+
+    <g fill="#525b69" font-family="SFMono-Regular, Consolas, monospace" font-size="14" text-anchor="end">
+      <text x="94" y="133">1</text>
+      <text x="94" y="171">2</text>
+      <text x="94" y="209">3</text>
+      <text x="94" y="247">4</text>
+      <text x="94" y="285">5</text>
+      <text x="94" y="323">6</text>
+      <text x="94" y="361">7</text>
+      <text x="94" y="399">8</text>
+      <text x="94" y="437">9</text>
+    </g>
+    <g font-family="SFMono-Regular, Consolas, monospace" font-size="15">
+      <text x="113" y="133" fill="#c586c0">subject_definitions</text>
+      <rect x="113" y="146" width="141" height="29" rx="7" fill="#123c52" stroke="#1e91cb"/>
+      <text x="125" y="166" fill="#81d7ff">&lt;Picture 1&gt;</text>
+      <text x="267" y="166" fill="#d6dae0"> is the lead subject.</text>
+      <text x="113" y="209" fill="#c586c0">summary</text>
+      <text x="113" y="247" fill="#9cdcfe">Create a cinematic sequence with</text>
+      <rect x="423" y="225" width="141" height="29" rx="7" fill="#123c52" stroke="#1e91cb"/>
+      <text x="435" y="245" fill="#81d7ff">&lt;Picture 1&gt;</text>
+      <text x="113" y="285" fill="#c586c0">retention_analysis</text>
+      <text x="113" y="323" fill="#ce9178">Keep facial identity and wardrobe.</text>
+      <text x="113" y="361" fill="#c586c0">detailed_description</text>
+      <text x="113" y="399" fill="#d6dae0">[00:00-00:04] Slow tracking shot...</text>
+      <text x="113" y="437" fill="#c586c0">overall_soundscape</text>
+      <text x="113" y="475" fill="#6a9955">// plain STRING output</text>
+    </g>
+  </g>
+
+  <rect x="0" y="628" width="1280" height="12" fill="url(#line)"/>
+</svg>

@@ -1,0 +1,319 @@
+import {
+    H3_ALL_SECTIONS,
+    H3_TASK_DIRECTIVES,
+    effectiveH3Mode,
+    h3SectionsForMode,
+} from "./h3_prompt_schema_core.mjs?v=0.2.0";
+
+export const H3_LANGUAGE_MARKERS = Object.freeze([
+    "[English]", "[French]", "[Spanish]", "[German]", "[Italian]",
+    "[Portuguese]", "[Chinese]", "[Japanese]", "[Korean]", "[Arabic]",
+    "[unclear]",
+]);
+
+function clampedCaret(text, caret) {
+    const number = Number(caret);
+    return Number.isFinite(number) ? Math.max(0, Math.min(text.length, Math.trunc(number))) : text.length;
+}
+
+function specialQuery(before, trigger, pattern) {
+    const match = before.match(pattern);
+    if (!match) return null;
+    const typed = match[1];
+    return {trigger, start:before.length - typed.length, end:before.length,
+        typed, query:typed.slice(1), manual:false};
+}
+
+export function promptCompletionQuery(value, caret, {manual = false} = {}) {
+    const text = String(value ?? "");
+    const position = clampedCaret(text, caret);
+    const before = text.slice(0, position);
+    for (const [trigger, pattern] of [
+        ["<", /(<[^>\n]{0,64})$/],
+        ["[", /(\[[^\]\n]{0,96})$/],
+        ["(", /(\(S[0-9,]*)$/i],
+    ]) {
+        const result = specialQuery(before, trigger, pattern);
+        if (result) return result;
+    }
+    const section = before.match(/(?:^|\n)([A-Za-z_][A-Za-z_]*)$/);
+    if (section && H3_ALL_SECTIONS.some((item) => item.startsWith(section[1].toLowerCase()))) {
+        const typed = section[1];
+        return {trigger:"section", start:position - typed.length, end:position,
+            typed, query:typed, manual:false};
+    }
+    if (!manual) return null;
+    return {trigger:"manual", start:position, end:position, typed:"", query:"", manual:true};
+}
+
+function normalizedSearch(value) {
+    return String(value ?? "").toLowerCase().replace(/^[<\[(]/, "")
+        .replace(/[>\])]$/, "").replace(/[_+:-]+/g, " ")
+        .replace(/\s+/g, " ").trim();
+}
+
+function score(item, query) {
+    const wanted = normalizedSearch(query);
+    if (!wanted) return 0;
+    const candidate = normalizedSearch(item.filterText ?? item.label);
+    if (candidate === wanted) return 0;
+    if (candidate.startsWith(wanted)) return 1;
+    const word = candidate.split(" ").findIndex((part) => part.startsWith(wanted));
+    if (word >= 0) return 3 + word;
+    const contained = candidate.indexOf(wanted);
+    return contained >= 0 ? 20 + contained : null;
+}
+
+function referenceItems(records) {
+    const items = [];
+    for (const record of records ?? []) {
+        const label = String(record?.token ?? "");
+        if (!/^<Picture\s+\d+>$/i.test(label)) continue;
+        items.push({kind:"picture", label, insertText:label, detail:"Connected H3 picture reference", priority:record.ordinal ?? 0});
+    }
+    for (let index = 1; index <= 8; index += 1) {
+        items.push({kind:"subject", label:`<Subject ${index}>`, insertText:`<Subject ${index}>`, detail:"H3 reusable visible subject", priority:20 + index});
+    }
+    for (let index = 1; index <= 3; index += 1) {
+        items.push({kind:"video", label:`<Video ${index}>`, insertText:`<Video ${index}>`, detail:"H3 reference video label", priority:40 + index});
+        items.push({kind:"audio", label:`<Audio ${index}>`, insertText:`<Audio ${index}>`, detail:"H3 reference audio label", priority:50 + index});
+    }
+    items.push(
+        {kind:"dialogue", label:"<d>…</d>", insertText:"<d></d>", filterText:"d dialogue", detail:"H3 dialogue or lyric span", caretOffset:3, priority:60},
+        {kind:"flow", label:"<scenetrans>", insertText:"<scenetrans>", detail:"Dialogue continues across a shot transition", priority:61},
+        {kind:"flow", label:"<cutoff>", insertText:"<cutoff>", detail:"Speech is truncated by the video ending", priority:62},
+        {kind:"dialogue", label:"</d>", insertText:"</d>", filterText:"/d close dialogue", detail:"Close an H3 dialogue span", priority:63},
+    );
+    return items;
+}
+
+function bracketItems() {
+    const items = H3_TASK_DIRECTIVES.map((label, index) => ({
+        kind:"directive", label, insertText:label, detail:"Ref2VA summary task type", priority:index,
+    }));
+    for (let index = 1; index <= 12; index += 1) {
+        const label = `[Shot ${index}]`;
+        items.push({kind:"shot", label, insertText:label, detail:"H3 shot marker", priority:40 + index});
+    }
+    H3_LANGUAGE_MARKERS.forEach((label, index) => items.push({
+        kind:"language", label, insertText:label,
+        detail:label === "[unclear]" ? "Unintelligible dialogue span" : "Dialogue language marker",
+        priority:60 + index,
+    }));
+    return items;
+}
+
+function speakerItems() {
+    const items = [];
+    for (let index = 1; index <= 8; index += 1) {
+        const label = `(S${index})`;
+        items.push({kind:"speaker", label, insertText:label, detail:"Stable H3 speaker ID", priority:index});
+    }
+    items.push({kind:"speaker", label:"(S1,S2)", insertText:"(S1,S2)", detail:"Multiple speakers together", priority:20});
+    return items;
+}
+
+function sectionItems(text, mode) {
+    const effective = effectiveH3Mode(text, mode);
+    return h3SectionsForMode(effective).map((section, index) => ({
+        kind:"section", label:`${section}:`, insertText:`${section}:`,
+        detail:`Required ${effective.toUpperCase()} section`, priority:index,
+    }));
+}
+
+function unique(items) {
+    const seen = new Set();
+    return items.filter((item) => {
+        if (seen.has(item.insertText)) return false;
+        seen.add(item.insertText);
+        return true;
+    });
+}
+
+export function promptCompletionItems(query, records = [], {text = "", mode = "auto", limit = 40} = {}) {
+    if (!query) return [];
+    let items;
+    if (query.trigger === "<") items = referenceItems(records);
+    else if (query.trigger === "[") items = bracketItems();
+    else if (query.trigger === "(") items = speakerItems();
+    else if (query.trigger === "section") items = sectionItems(text, mode);
+    else items = [...referenceItems(records), ...bracketItems(), ...speakerItems(), ...sectionItems(text, mode)];
+    return unique(items).map((item) => ({item, score:score(item, query.query)}))
+        .filter((entry) => entry.score != null)
+        .sort((left, right) => left.score - right.score
+            || (left.item.priority ?? 0) - (right.item.priority ?? 0)
+            || left.item.label.localeCompare(right.item.label))
+        .slice(0, Math.max(1, Number(limit) || 40)).map((entry) => entry.item);
+}
+
+export function applyPromptCompletion(value, query, item) {
+    const text = String(value ?? "");
+    if (!query || !item) return {text, caret:text.length};
+    const start = Math.max(0, Math.min(text.length, Number(query.start) || 0));
+    const end = Math.max(start, Math.min(text.length, Number(query.end) || start));
+    const insertText = String(item.insertText ?? item.label ?? "");
+    const result = text.slice(0, start) + insertText + text.slice(end);
+    const relative = item.caretOffset == null ? insertText.length
+        : Math.max(0, Math.min(insertText.length, Number(item.caretOffset) || 0));
+    return {text:result, caret:start + relative};
+}
+
+function injectStyles() {
+    if (document.getElementById("h3-prompt-completion-style")) return;
+    const style = document.createElement("style");
+    style.id = "h3-prompt-completion-style";
+    style.textContent = `
+      .h3pc-menu { position:fixed; z-index:100200; width:min(440px,calc(100vw - 24px));
+        max-height:min(300px,45vh); overflow:auto; padding:5px; border:1px solid #60718c;
+        border-radius:8px; background:var(--comfy-menu-bg,#171a20); color:var(--input-text,#eef2f8);
+        box-shadow:0 16px 42px rgba(0,0,0,.52); font:12px/1.35 system-ui,sans-serif; }
+      .h3pc-menu[hidden] { display:none; }
+      .h3pc-option { display:grid; grid-template-columns:auto minmax(0,1fr); gap:2px 8px;
+        align-items:center; padding:6px 7px; border-radius:5px; cursor:pointer; }
+      .h3pc-option[aria-selected="true"] { background:color-mix(in srgb,#5e8fff 24%,transparent); }
+      .h3pc-kind { grid-row:1/3; min-width:28px; padding:2px 4px; border:1px solid #65738a;
+        border-radius:4px; color:color-mix(in srgb,var(--input-text,#eef2f8) 72%,transparent);
+        text-align:center; font-size:9px; font-weight:750; text-transform:uppercase; }
+      .h3pc-label { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+        font:600 12px/1.3 ui-monospace,SFMono-Regular,Consolas,monospace; }
+      .h3pc-detail { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+        color:color-mix(in srgb,var(--input-text,#eef2f8) 58%,transparent); font-size:10px; }
+    `;
+    document.head.append(style);
+}
+
+function caretAnchor(input) {
+    const selection = globalThis.getSelection?.();
+    if (selection?.rangeCount && input.contains(selection.anchorNode)) {
+        const range = selection.getRangeAt(0).cloneRange();
+        range.collapse(true);
+        const rect = range.getBoundingClientRect();
+        if (rect && (rect.width || rect.height || rect.left || rect.top)) return rect;
+    }
+    return input.getBoundingClientRect?.() ?? {left:12, bottom:40, top:12};
+}
+
+export function createPromptCompletionController({
+    input, getText, getCaret, getRecords = () => [], getMode = () => "auto",
+    replaceText, maxItems = 80,
+} = {}) {
+    if (!input || typeof replaceText !== "function") return null;
+    injectStyles();
+    const menu = document.createElement("div");
+    const menuId = `h3pc-${Math.random().toString(36).slice(2)}`;
+    menu.id = menuId;
+    menu.className = "h3pc-menu";
+    menu.setAttribute("role", "listbox");
+    menu.hidden = true;
+    for (const eventName of ["pointerdown", "click", "wheel"]) {
+        menu.addEventListener(eventName, (event) => event.stopPropagation());
+    }
+    document.body.append(menu);
+    input.setAttribute("aria-autocomplete", "list");
+    input.setAttribute("aria-controls", menuId);
+    let currentQuery = null;
+    let currentItems = [];
+    let selected = 0;
+
+    function hide() {
+        currentQuery = null; currentItems = []; selected = 0; menu.hidden = true;
+        input.setAttribute("aria-expanded", "false");
+        input.removeAttribute("aria-activedescendant");
+    }
+
+    function position() {
+        const anchor = caretAnchor(input);
+        const width = Math.min(440, Math.max(240, globalThis.innerWidth - 24));
+        menu.style.left = `${Math.max(12, Math.min(globalThis.innerWidth - width - 12, anchor.left ?? 12))}px`;
+        const below = (anchor.bottom ?? anchor.top ?? 12) + 6;
+        menu.style.top = globalThis.innerHeight - below > 180 ? `${below}px`
+            : `${Math.max(12, (anchor.top ?? below) - menu.offsetHeight - 6)}px`;
+    }
+
+    function updateActive() {
+        const options = [...menu.querySelectorAll(".h3pc-option")];
+        options.forEach((option, index) => option.setAttribute("aria-selected", String(index === selected)));
+        const active = options[selected];
+        if (active) {
+            input.setAttribute("aria-activedescendant", active.id);
+            active.scrollIntoView?.({block:"nearest"});
+        }
+    }
+
+    function accept(index = selected) {
+        const item = currentItems[index];
+        if (!item || !currentQuery) return false;
+        replaceText(applyPromptCompletion(getText(), currentQuery, item), item);
+        hide(); input.focus(); return true;
+    }
+
+    function render() {
+        menu.replaceChildren();
+        currentItems.forEach((item, index) => {
+            const option = document.createElement("div");
+            option.id = `${menuId}-option-${index}`;
+            option.className = "h3pc-option";
+            option.setAttribute("role", "option");
+            const kind = document.createElement("span");
+            kind.className = "h3pc-kind";
+            kind.textContent = String(item.kind || "H3").slice(0, 3);
+            const label = document.createElement("span");
+            label.className = "h3pc-label"; label.textContent = item.label;
+            const detail = document.createElement("span");
+            detail.className = "h3pc-detail"; detail.textContent = item.detail || "H3 completion";
+            option.append(kind, label, detail);
+            option.addEventListener("pointerdown", (event) => event.preventDefault());
+            option.addEventListener("mouseenter", () => { selected = index; updateActive(); });
+            option.addEventListener("click", () => accept(index));
+            menu.append(option);
+        });
+        menu.hidden = false; input.setAttribute("aria-expanded", "true"); updateActive(); position();
+    }
+
+    function refresh({manual = false} = {}) {
+        const text = String(getText?.() ?? "");
+        currentQuery = promptCompletionQuery(text, getCaret?.(), {manual});
+        currentItems = promptCompletionItems(currentQuery, getRecords(), {
+            text, mode:getMode(), limit:maxItems,
+        });
+        selected = Math.min(selected, Math.max(0, currentItems.length - 1));
+        if (!currentQuery || !currentItems.length) hide(); else render();
+        return !menu.hidden;
+    }
+
+    function handleKeydown(event) {
+        if ((event.ctrlKey || event.metaKey) && !event.altKey
+                && (event.code === "Space" || event.key === " ")) {
+            event.preventDefault(); refresh({manual:true}); return true;
+        }
+        if (menu.hidden) return false;
+        if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+            event.preventDefault();
+            selected = (selected + (event.key === "ArrowDown" ? 1 : -1) + currentItems.length) % currentItems.length;
+            updateActive(); return true;
+        }
+        if (event.key === "Enter" || event.key === "Tab") {
+            event.preventDefault(); return accept();
+        }
+        if (event.key === "Escape") { event.preventDefault(); hide(); return true; }
+        return false;
+    }
+
+    const onBlur = () => globalThis.setTimeout?.(() => { if (!menu.matches(":hover")) hide(); }, 100);
+    const onClick = () => refresh();
+    const onKeyup = (event) => { if (["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) refresh(); };
+    const onResize = () => { if (!menu.hidden) position(); };
+    input.addEventListener("blur", onBlur);
+    input.addEventListener("click", onClick);
+    input.addEventListener("keyup", onKeyup);
+    globalThis.addEventListener?.("resize", onResize);
+    globalThis.addEventListener?.("scroll", onResize, true);
+    return {refresh, hide, accept, handleKeydown, get visible() { return !menu.hidden; }, destroy() {
+        input.removeEventListener("blur", onBlur);
+        input.removeEventListener("click", onClick);
+        input.removeEventListener("keyup", onKeyup);
+        globalThis.removeEventListener?.("resize", onResize);
+        globalThis.removeEventListener?.("scroll", onResize, true);
+        menu.remove();
+    }};
+}
