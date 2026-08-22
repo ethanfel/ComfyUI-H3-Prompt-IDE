@@ -1,9 +1,27 @@
 [project]
-name = "comfyui-h3-prompt-ide"
+name = "h3-prompt-ide"
 version = "0.5.0"
-description = "Standalone rich H3 prompt editor and reference-input palette for ComfyUI"
+description = "VS Code-inspired MiniMax H3 prompt editor and reference media palette for ComfyUI"
+readme = "README.md"
 requires-python = ">=3.10"
-license = { text = "GPL-3.0-only" }
+license = { file = "LICENSE" }
+dependencies = []
+keywords = ["comfyui", "minimax-h3", "prompt-editor", "video-generation"]
+classifiers = [
+    "Operating System :: OS Independent",
+    "License :: OSI Approved :: GNU General Public License v3 (GPLv3)",
+]
+
+[project.urls]
+Repository = "https://github.com/ethanfel/ComfyUI-H3-Prompt-IDE"
+Documentation = "https://github.com/ethanfel/ComfyUI-H3-Prompt-IDE#readme"
+"Bug Tracker" = "https://github.com/ethanfel/ComfyUI-H3-Prompt-IDE/issues"
+
+[tool.comfy]
+PublisherId = "ethanfel"
+DisplayName = "H3 Prompt IDE"
+Icon = "https://raw.githubusercontent.com/ethanfel/ComfyUI-H3-Prompt-IDE/main/assets/h3-prompt-ide.svg"
+Banner = "https://raw.githubusercontent.com/ethanfel/ComfyUI-H3-Prompt-IDE/main/assets/github-social-preview.svg"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

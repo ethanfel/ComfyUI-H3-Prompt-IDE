@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="640" viewBox="0 0 1280 640" role="img" aria-labelledby="title description">
+<svg xmlns="http://www.w3.org/2000/svg" width="1260" height="540" viewBox="0 50 1260 540" role="img" aria-labelledby="title description">
   <title id="title">H3 Prompt IDE for ComfyUI</title>
   <desc id="description">A VS Code-inspired H3 prompt editor interface with strict categories and Picture reference tokens.</desc>
   <defs>

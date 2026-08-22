@@ -1,0 +1,2 @@
+# Development-only files excluded from Registry releases.
+tests/
