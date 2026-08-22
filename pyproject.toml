@@ -3,7 +3,7 @@ name = "comfyui-h3-prompt-ide"
 version = "0.5.0"
 description = "Standalone rich H3 prompt editor and reference-input palette for ComfyUI"
 requires-python = ">=3.10"
-license = { text = "MIT" }
+license = { text = "GPL-3.0-only" }
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

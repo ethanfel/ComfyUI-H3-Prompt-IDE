@@ -37,4 +37,4 @@ The editor includes a scoped workaround for the recurring [LiteGraph widget-widt
 
 ## License
 
-[MIT](LICENSE)
+[GNU GPL v3](LICENSE)
