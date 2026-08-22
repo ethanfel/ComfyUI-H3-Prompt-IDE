@@ -45,18 +45,18 @@
     <text x="70" y="329" fill="#9da8b6" font-size="23" font-weight="450">Rich H3 authoring for ComfyUI</text>
 
     <g transform="translate(70 386)">
-      <rect width="142" height="38" rx="19" fill="#123c52" stroke="#1a83b8"/>
+      <rect width="166" height="38" rx="19" fill="#123c52" stroke="#1a83b8"/>
       <circle cx="22" cy="19" r="5" fill="#46c8ff"/>
       <text x="38" y="25" fill="#9ee2ff" font-size="17" font-weight="600">H3 completion</text>
-      <rect x="154" width="128" height="38" rx="19" fill="#2f254c" stroke="#6650a8"/>
-      <circle cx="176" cy="19" r="5" fill="#a98cff"/>
-      <text x="192" y="25" fill="#d5c8ff" font-size="17" font-weight="600">Strict modes</text>
-      <rect y="52" width="128" height="38" rx="19" fill="#163a2e" stroke="#28745a"/>
+      <rect x="178" width="148" height="38" rx="19" fill="#2f254c" stroke="#6650a8"/>
+      <circle cx="200" cy="19" r="5" fill="#a98cff"/>
+      <text x="216" y="25" fill="#d5c8ff" font-size="17" font-weight="600">Strict modes</text>
+      <rect y="52" width="166" height="38" rx="19" fill="#163a2e" stroke="#28745a"/>
       <circle cx="22" cy="71" r="5" fill="#3ed598"/>
       <text x="38" y="77" fill="#a1e8c9" font-size="17" font-weight="600">Plain text out</text>
-      <rect x="140" y="52" width="168" height="38" rx="19" fill="#402b1e" stroke="#8d603c"/>
-      <circle cx="162" cy="71" r="5" fill="#e8a468"/>
-      <text x="178" y="77" fill="#f1c99f" font-size="17" font-weight="600">Picture previews</text>
+      <rect x="178" y="52" width="188" height="38" rx="19" fill="#402b1e" stroke="#8d603c"/>
+      <circle cx="200" cy="71" r="5" fill="#e8a468"/>
+      <text x="216" y="77" fill="#f1c99f" font-size="17" font-weight="600">Picture previews</text>
     </g>
     <text x="70" y="543" fill="#687382" font-size="17" font-family="SFMono-Regular, Consolas, monospace">T2VA · I2VA · FL2VA · L2VA · Ref2VA</text>
   </g>
