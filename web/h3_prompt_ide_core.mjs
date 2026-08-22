@@ -1,4 +1,4 @@
-import {H3_ALL_SECTIONS} from "./h3_prompt_schema_core.mjs?v=0.3.0";
+import {H3_ALL_SECTIONS} from "./h3_prompt_schema_core.mjs?v=0.4.0";
 
 export const H3_PICTURE_LIMIT = 9;
 export const H3_VIDEO_LIMIT = 3;

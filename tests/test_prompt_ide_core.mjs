@@ -73,6 +73,10 @@ assert.match(source, /createPromptCompletionController/);
 assert.match(source, /analyzeH3Prompt/);
 assert.match(source, /ensureH3Structure/);
 assert.match(source, /"Sections"/);
+assert.match(source, /element\("textarea", "h3ide-plain-editor"\)/);
+assert.match(source, /state\.richText \? "Rich text" : "Plain text"/);
+assert.match(source, /Disable rich text and show the base prompt/);
+assert.match(source, /h3ide-token-label/);
 assert.match(source, /Type <, \[, \(, or a section name/);
 assert.doesNotMatch(source, /Type @, #/);
 

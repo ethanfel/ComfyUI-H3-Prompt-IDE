@@ -26,7 +26,7 @@ Restart ComfyUI, then find the nodes under **text → H3 Prompt IDE**.
 
 ## Nodes
 
-- **H3 Prompt IDE** — rich editor with T2VA, I2VA, FL2VA, L2VA, and Ref2VA validation; H3-aware completion; section insertion; diagnostics; and plain-text output.
+- **H3 Prompt IDE** — rich editor with a Plain/Rich source toggle, T2VA, I2VA, FL2VA, L2VA, and Ref2VA validation; H3-aware completion; section insertion; diagnostics; and plain-text output.
 - **H3 Reference Inputs** — independently autogrows `<Picture 1>`–`<Picture 9>`, `<Video 1>`–`<Video 3>`, and `<Audio 1>`–`<Audio 6>` while keeping media sockets off the editor node.
 
 Reference associations use H3's native `<Picture 1>`, `<Video 1>`, and `<Audio 1>` naming. Audio labels must follow native presentation order: connected video soundtracks first, then standalone audio. This standalone editor intentionally does not include Motion Context `@tag` or `@@@@tag` compilation.

@@ -5,8 +5,8 @@ import {
     referenceFromInputName,
     tokenizePrompt,
     undoDirection,
-} from "./h3_prompt_ide_core.mjs?v=0.3.0";
-import {createPromptCompletionController} from "./h3_prompt_completion_core.mjs?v=0.3.0";
+} from "./h3_prompt_ide_core.mjs?v=0.4.0";
+import {createPromptCompletionController} from "./h3_prompt_completion_core.mjs?v=0.4.0";
 import {
     analyzeH3Prompt,
     effectiveH3Mode,
@@ -14,7 +14,7 @@ import {
     H3_MODES,
     h3ModeLabel,
     insertH3Section,
-} from "./h3_prompt_schema_core.mjs?v=0.3.0";
+} from "./h3_prompt_schema_core.mjs?v=0.4.0";
 
 const EDITOR_NODE = "H3PromptIDE";
 const REFERENCES_NODE = "H3PromptReferenceInputs";
@@ -24,6 +24,7 @@ const STRUCTURE_PROPERTY = "h3_prompt_ide_structure_open";
 const MODE_PROPERTY = "h3_prompt_ide_mode";
 const DURATION_PROPERTY = "h3_prompt_ide_duration";
 const FINAL_SHOT_PROPERTY = "h3_prompt_ide_final_shot";
+const RICH_TEXT_PROPERTY = "h3_prompt_ide_rich_text";
 const DEFAULT_FONT = 17;
 const MIN_FONT = 12;
 const MAX_FONT = 32;
@@ -77,6 +78,8 @@ function injectStyles() {
         border:1px solid var(--h3ide-border); border-radius:6px; background:var(--comfy-input-bg,#171a21); }
       .h3ide-root select,.h3ide-root input { min-width:0; padding:4px 7px; }
       .h3ide-root button:hover,.h3ide-root button:focus-visible { border-color:var(--h3ide-accent); outline:none; }
+      .h3ide-root button.h3ide-presentation-active { border-color:var(--h3ide-accent);
+        background:color-mix(in srgb,var(--h3ide-accent) 18%,var(--comfy-input-bg,#171a21)); }
       .h3ide-root button:disabled { opacity:.4; cursor:not-allowed; }
       .h3ide-icon { width:16px; height:16px; display:inline-flex; flex:0 0 16px; }
       .h3ide-icon svg { width:100%; height:100%; fill:none; stroke:currentColor; stroke-width:1.7;
@@ -89,6 +92,12 @@ function injectStyles() {
       .h3ide-editor { width:100%; height:100%; min-height:300px; overflow:auto; padding:13px 14px;
         outline:none; white-space:pre-wrap; overflow-wrap:anywhere; caret-color:var(--h3ide-text);
         font:var(--h3ide-font-size)/1.58 ui-monospace,SFMono-Regular,Consolas,monospace; }
+      .h3ide-plain-editor { display:none; width:100%; height:100%; min-height:300px; resize:none;
+        overflow:auto; padding:13px 14px; border:0; outline:none; color:var(--h3ide-text);
+        background:transparent; caret-color:var(--h3ide-text); white-space:pre-wrap;
+        font:var(--h3ide-font-size)/1.58 ui-monospace,SFMono-Regular,Consolas,monospace; }
+      .h3ide-editor-shell.h3ide-plain .h3ide-editor { display:none; }
+      .h3ide-editor-shell.h3ide-plain .h3ide-plain-editor { display:block; }
       .h3ide-editor:empty::before { content:attr(data-placeholder); color:var(--h3ide-muted); pointer-events:none; }
       .h3ide-token { display:inline-flex; align-items:center; gap:3px; max-width:320px; margin:0 1px;
         padding:1px 4px 1px 2px; border:1px solid currentColor; border-radius:5px; vertical-align:1px;
@@ -104,7 +113,7 @@ function injectStyles() {
       .h3ide-token-flow { color:var(--h3ide-flow); }
       .h3ide-token-speaker { color:var(--h3ide-speaker); }
       .h3ide-token-unresolved { color:var(--h3ide-danger); border-style:dashed; }
-      .h3ide-token-thumb { width:18px; height:18px; flex:0 0 18px; object-fit:cover; border-radius:3px;
+      .h3ide-token-thumb { width:16px; height:16px; flex:0 0 16px; object-fit:cover; border-radius:3px;
         background:rgba(255,255,255,.09); }
       .h3ide-token-label { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
       .h3ide-ref-tray { display:none; max-height:230px; overflow:auto; padding:8px; gap:6px;
@@ -443,6 +452,7 @@ function mountEditor(node) {
 
     const state = {
         editor:null,
+        plainEditor:null,
         tray:null,
         structure:null,
         counts:null,
@@ -458,19 +468,69 @@ function mountEditor(node) {
             ? node.properties[MODE_PROPERTY] : "auto",
         duration:Math.max(0.01, Number(node.properties[DURATION_PROPERTY]) || 6),
         finalShot:Math.max(1, Math.min(99, Math.trunc(Number(node.properties[FINAL_SHOT_PROPERTY]) || 1))),
+        richText:node.properties[RICH_TEXT_PROPERTY] !== false,
         analysis:null,
         completion:null,
         pollTimer:null,
     };
     node._h3PromptIdeState = state;
+    let shell;
+    let presentationButton;
 
     function dirty() {
         node.graph?.setDirtyCanvas?.(true, true);
         app.graph?.setDirtyCanvas?.(true, true);
     }
 
+    function currentText() {
+        if (!state.richText && state.plainEditor) return state.plainEditor.value;
+        return state.editor ? editorPlainText(state.editor) : state.lastWidgetValue;
+    }
+
+    function focusCurrentEditor(caret = null) {
+        if (!state.richText && state.plainEditor) {
+            const position = caret == null ? state.plainEditor.value.length
+                : Math.max(0, Math.min(state.plainEditor.value.length, Number(caret) || 0));
+            state.plainEditor.focus();
+            state.plainEditor.setSelectionRange(position, position);
+            return;
+        }
+        if (caret != null) renderText(currentText(), caret);
+        state.editor?.focus();
+    }
+
+    function selectedCurrentText() {
+        if (!state.richText && state.plainEditor) {
+            const {selectionStart:start, selectionEnd:end, value} = state.plainEditor;
+            return start === end ? null : value.slice(start, end);
+        }
+        return selectedPlainText(state.editor);
+    }
+
+    function setRichText(enabled, {focus = true} = {}) {
+        const value = currentText();
+        const caret = state.richText
+            ? selectionTextOffset(state.editor)
+            : state.plainEditor?.selectionStart ?? value.length;
+        state.richText = Boolean(enabled);
+        node.properties[RICH_TEXT_PROPERTY] = state.richText;
+        shell?.classList.toggle("h3ide-plain", !state.richText);
+        if (state.plainEditor) state.plainEditor.value = value;
+        if (state.richText && state.editor) renderText(value, caret);
+        if (presentationButton) {
+            presentationButton.textContent = state.richText ? "Rich text" : "Plain text";
+            presentationButton.title = state.richText
+                ? "Disable rich text and show the base prompt"
+                : "Enable H3 syntax highlighting and reference previews";
+            presentationButton.classList.toggle("h3ide-presentation-active", state.richText);
+        }
+        updateFooter(state.richText ? "Rich text enabled" : "Showing base prompt");
+        if (focus) focusCurrentEditor(caret);
+        dirty();
+    }
+
     function updateFooter(message = "Plain STRING ready") {
-        const text = state.editor ? editorPlainText(state.editor) : state.lastWidgetValue;
+        const text = currentText();
         const words = text.trim() ? text.trim().split(/\s+/).length : 0;
         state.analysis = analyzeH3Prompt(text, state.mode, {
             duration:state.duration,
@@ -498,13 +558,13 @@ function mountEditor(node) {
         if (part.unresolved) token.classList.add("h3ide-token-unresolved");
         if (part.type === "section") {
             token.append(element("span", "h3ide-token-label", part.text));
-        } else if (record?.preview) {
-            const thumb = element("img", "h3ide-token-thumb");
-            thumb.src = record.preview;
-            thumb.alt = "";
-            token.append(thumb);
         } else {
-            token.append(icon(part.kind));
+            if (record?.preview) {
+                const thumb = element("img", "h3ide-token-thumb");
+                thumb.src = record.preview;
+                thumb.alt = "";
+                token.append(thumb);
+            } else token.append(icon(part.kind));
             token.append(element("span", "h3ide-token-label", part.text));
         }
         token.title = part.unresolved
@@ -529,6 +589,7 @@ function mountEditor(node) {
         state.lastWidgetValue = value;
         promptWidget.value = value;
         promptWidget.callback?.(value);
+        if (state.plainEditor && state.plainEditor.value !== value) state.plainEditor.value = value;
         updateFooter(message);
         dirty();
         refreshHistoryButtons();
@@ -540,14 +601,28 @@ function mountEditor(node) {
         state.lastWidgetValue = value;
         promptWidget.value = value;
         promptWidget.callback?.(value);
+        if (state.plainEditor) state.plainEditor.value = value;
         renderText(value, caret == null ? value.length : caret);
         updateFooter(message);
         refreshHistoryButtons();
-        state.editor.focus();
+        focusCurrentEditor(caret == null ? value.length : caret);
         dirty();
     }
 
     function insertDecorated(text, caret = null) {
+        if (!state.richText && state.plainEditor) {
+            const editor = state.plainEditor;
+            const start = editor.selectionStart;
+            const end = editor.selectionEnd;
+            const inserted = String(text ?? "");
+            const value = editor.value.slice(0, start) + inserted + editor.value.slice(end);
+            const position = start + (caret == null ? inserted.length : caret);
+            editor.value = value;
+            writeWidget(value, {inputType:"insertText"});
+            editor.focus();
+            editor.setSelectionRange(position, position);
+            return;
+        }
         const start = selectionTextOffset(state.editor);
         insertPlainText(state.editor, text);
         renderText(editorPlainText(state.editor), caret == null ? start + String(text).length : start + caret);
@@ -598,18 +673,18 @@ function mountEditor(node) {
     }
 
     function addSection(section) {
-        const text = editorPlainText(state.editor);
+        const text = currentText();
         const mode = effectiveH3Mode(text, state.mode);
         const result = insertH3Section(text, section, mode);
         if (result.added) replaceEditorText(result.text, result.caret, `Added ${section}:`);
         else {
-            renderText(text, result.caret);
-            state.editor.focus();
+            if (state.richText) renderText(text, result.caret);
+            focusCurrentEditor(result.caret);
         }
     }
 
     function addMissingStructure() {
-        const text = editorPlainText(state.editor);
+        const text = currentText();
         const mode = effectiveH3Mode(text, state.mode);
         const result = ensureH3Structure(text, mode, structureOptions());
         const message = result.added.length
@@ -634,7 +709,7 @@ function mountEditor(node) {
 
     function renderStructurePanel() {
         if (!state.structure) return;
-        const text = state.editor ? editorPlainText(state.editor) : state.lastWidgetValue;
+        const text = currentText();
         const analysis = state.analysis ?? analyzeH3Prompt(text, state.mode, {
             ...structureOptions(),
             connectedReferences:state.records,
@@ -684,8 +759,8 @@ function mountEditor(node) {
                 element("span", "h3ide-section-name", `${section}:`),
                 button(record ? "Go" : "Add", record ? `Go to ${section}:` : `Add ${section}: in H3 order`, () => {
                     if (record) {
-                        renderText(editorPlainText(state.editor), record.contentStart);
-                        state.editor.focus();
+                        if (state.richText) renderText(currentText(), record.contentStart);
+                        focusCurrentEditor(record.contentStart);
                     } else addSection(section);
                 }),
             );
@@ -712,8 +787,8 @@ function mountEditor(node) {
         state.records = referenceRecords(node);
         if (state.tray) renderTray();
         if (state.editor) {
-            const text = editorPlainText(state.editor);
-            const caret = document.activeElement === state.editor
+            const text = currentText();
+            const caret = state.richText && document.activeElement === state.editor
                 ? selectionTextOffset(state.editor) : null;
             renderText(text, caret);
         }
@@ -725,7 +800,8 @@ function mountEditor(node) {
         if (value === state.lastWidgetValue) return;
         state.lastWidgetValue = value;
         state.history.align(value);
-        const caret = document.activeElement === state.editor
+        if (state.plainEditor && state.plainEditor.value !== value) state.plainEditor.value = value;
+        const caret = state.richText && document.activeElement === state.editor
             ? Math.min(selectionTextOffset(state.editor), value.length) : null;
         renderText(value, caret);
         refreshHistoryButtons();
@@ -744,17 +820,18 @@ function mountEditor(node) {
         state.lastWidgetValue = text;
         promptWidget.value = text;
         promptWidget.callback?.(text);
+        if (state.plainEditor) state.plainEditor.value = text;
         renderText(text, text.length);
         updateFooter(direction === "undo" ? "Undo" : "Redo");
         refreshHistoryButtons();
-        state.editor.focus();
+        focusCurrentEditor(text.length);
         dirty();
     }
 
     let context;
     function updateHeader() {
         if (!context) return;
-        const text = state.editor ? editorPlainText(state.editor) : state.lastWidgetValue;
+        const text = currentText();
         const mode = state.analysis?.mode ?? effectiveH3Mode(text, state.mode);
         const health = state.analysis?.valid ? "schema valid"
             : `${state.analysis?.problems.filter((item) => item.severity === "error").length ?? 0} errors`;
@@ -803,10 +880,18 @@ function mountEditor(node) {
         dirty();
     }, "reference");
     const dialogueButton = button("Dialogue", "Wrap the selection in <d> tags", () => {
-        const selected = selectedPlainText(state.editor);
+        const selected = selectedCurrentText();
         if (selected == null) insertDecorated("<d></d>", 3);
         else insertDecorated(`<d>${selected}</d>`);
     }, "dialogue");
+    presentationButton = button(
+        state.richText ? "Rich text" : "Plain text",
+        state.richText
+            ? "Disable rich text and show the base prompt"
+            : "Enable H3 syntax highlighting and reference previews",
+        () => setRichText(!state.richText),
+    );
+    presentationButton.classList.toggle("h3ide-presentation-active", state.richText);
     undoButton = button("↶", "Undo (Ctrl/Cmd+Z)", () => applyHistory("undo"));
     redoButton = button("↷", "Redo (Ctrl/Cmd+Shift+Z)", () => applyHistory("redo"));
     const smaller = button("A−", "Decrease editor font", () => {
@@ -826,6 +911,7 @@ function mountEditor(node) {
         sectionsButton,
         refsButton,
         dialogueButton,
+        presentationButton,
         undoButton,
         redoButton,
         element("span", "h3ide-spacer"),
@@ -839,7 +925,8 @@ function mountEditor(node) {
     state.structure = element("div", "h3ide-structure");
     state.structure.classList.toggle("h3ide-open", state.structureOpen);
 
-    const shell = element("div", "h3ide-editor-shell");
+    shell = element("div", "h3ide-editor-shell");
+    shell.classList.toggle("h3ide-plain", !state.richText);
     state.editor = element("div", "h3ide-editor");
     state.editor.contentEditable = "true";
     state.editor.spellcheck = true;
@@ -879,7 +966,16 @@ function mountEditor(node) {
         }
     });
     state.editor.addEventListener("blur", () => renderText(editorPlainText(state.editor)));
-    shell.append(state.editor);
+    state.plainEditor = element("textarea", "h3ide-plain-editor");
+    state.plainEditor.value = state.lastWidgetValue;
+    state.plainEditor.placeholder = "Base H3 prompt text";
+    state.plainEditor.spellcheck = true;
+    state.plainEditor.setAttribute("aria-label", "Base H3 prompt text");
+    state.plainEditor.addEventListener("input", (event) => {
+        writeWidget(state.plainEditor.value, event, "Base prompt saved");
+    });
+    state.plainEditor.addEventListener("blur", () => updateFooter("Base prompt saved"));
+    shell.append(state.editor, state.plainEditor);
     state.completion = createPromptCompletionController({
         input:state.editor,
         getText:() => editorPlainText(state.editor),
