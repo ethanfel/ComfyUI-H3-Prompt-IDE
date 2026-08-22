@@ -1,18 +1,57 @@
-import {H3_ALL_SECTIONS} from "./h3_prompt_schema_core.mjs?v=0.2.0";
+import {H3_ALL_SECTIONS} from "./h3_prompt_schema_core.mjs?v=0.3.0";
 
 export const H3_PICTURE_LIMIT = 9;
+export const H3_VIDEO_LIMIT = 3;
+export const H3_AUDIO_LIMIT = 6;
+
+const REFERENCE_LIMITS = Object.freeze({
+    picture:H3_PICTURE_LIMIT,
+    video:H3_VIDEO_LIMIT,
+    audio:H3_AUDIO_LIMIT,
+});
+
+const REFERENCE_LABELS = Object.freeze({
+    picture:"Picture",
+    video:"Video",
+    audio:"Audio",
+});
+
+export function referenceToken(kind, ordinal) {
+    const normalizedKind = String(kind ?? "").toLowerCase();
+    const value = Math.trunc(Number(ordinal));
+    const limit = REFERENCE_LIMITS[normalizedKind];
+    return Number.isInteger(value) && value >= 1 && value <= limit
+        ? `<${REFERENCE_LABELS[normalizedKind]} ${value}>` : null;
+}
 
 export function pictureToken(ordinal) {
-    const value = Math.trunc(Number(ordinal));
-    return Number.isInteger(value) && value >= 1 && value <= H3_PICTURE_LIMIT
-        ? `<Picture ${value}>` : null;
+    return referenceToken("picture", ordinal);
+}
+
+export function videoToken(ordinal) {
+    return referenceToken("video", ordinal);
+}
+
+export function audioToken(ordinal) {
+    return referenceToken("audio", ordinal);
+}
+
+export function referenceFromInputName(name) {
+    const match = String(name ?? "").match(
+        /^(?:(pictures|videos|audios)\.)?<(Picture|Video|Audio)\s+(\d+)>$/i,
+    );
+    if (!match) return null;
+    const kind = match[2].toLowerCase();
+    const groupKind = match[1]?.toLowerCase().replace(/s$/, "") ?? kind;
+    if (groupKind !== kind) return null;
+    const ordinal = Number(match[3]);
+    const token = referenceToken(kind, ordinal);
+    return token ? {kind, ordinal, token} : null;
 }
 
 export function pictureOrdinalFromInputName(name) {
-    const match = String(name ?? "").match(
-        /^(?:pictures\.)?<Picture\s+([1-9])>$/i,
-    );
-    return match ? Number(match[1]) : null;
+    const reference = referenceFromInputName(name);
+    return reference?.kind === "picture" ? reference.ordinal : null;
 }
 
 const SECTION_ALTERNATION = H3_ALL_SECTIONS.join("|");
@@ -21,11 +60,26 @@ const TOKEN_PATTERN = new RegExp(
     "gim",
 );
 
-export function tokenizePrompt(value, connectedPictures = []) {
+function connectedReferenceTokens(references) {
+    const connected = new Set();
+    for (const reference of references ?? []) {
+        if (typeof reference === "number") {
+            const token = pictureToken(reference);
+            if (token) connected.add(token.toLowerCase());
+            continue;
+        }
+        const rawToken = typeof reference === "string" ? reference : reference?.token;
+        const match = String(rawToken ?? "").match(/^<(Picture|Video|Audio)\s+(\d+)>$/i);
+        if (!match) continue;
+        const token = referenceToken(match[1], match[2]);
+        if (token) connected.add(token.toLowerCase());
+    }
+    return connected;
+}
+
+export function tokenizePrompt(value, connectedReferences = []) {
     const source = String(value ?? "");
-    const connected = new Set(
-        connectedPictures.map(Number).filter(Number.isInteger),
-    );
+    const connected = connectedReferenceTokens(connectedReferences);
     const parts = [];
     let offset = 0;
     for (const match of source.matchAll(TOKEN_PATTERN)) {
@@ -35,23 +89,20 @@ export function tokenizePrompt(value, connectedPictures = []) {
         const tag = text.toLowerCase();
         const section = tag.endsWith(":")
             ? H3_ALL_SECTIONS.find((item) => `${item}:` === tag) : null;
-        const picture = tag.match(/^<picture\s+(\d+)>$/);
+        const externalReference = tag.match(/^<(picture|video|audio)\s+(\d+)>$/);
         if (section) {
             parts.push({type:"section", kind:"section", text, section,
                 unresolved:text !== `${section}:`});
-        } else if (picture) {
-            const ordinal = Number(picture[1]);
+        } else if (externalReference) {
+            const kind = externalReference[1];
+            const ordinal = Number(externalReference[2]);
             parts.push({
                 type: "reference",
-                kind: "picture",
+                kind,
                 text,
                 ordinal,
-                unresolved: !connected.has(ordinal),
+                unresolved: !connected.has(tag),
             });
-        } else if (tag.startsWith("<video")) {
-            parts.push({type: "reference", kind: "video", text, unresolved: false});
-        } else if (tag.startsWith("<audio")) {
-            parts.push({type: "reference", kind: "audio", text, unresolved: false});
         } else if (tag.startsWith("<subject")) {
             parts.push({type: "subject", kind: "subject", text, unresolved: false});
         } else if (tag === "<scenetrans>" || tag === "<cutoff>") {

@@ -3,7 +3,7 @@ import {
     H3_TASK_DIRECTIVES,
     effectiveH3Mode,
     h3SectionsForMode,
-} from "./h3_prompt_schema_core.mjs?v=0.2.0";
+} from "./h3_prompt_schema_core.mjs?v=0.3.0";
 
 export const H3_LANGUAGE_MARKERS = Object.freeze([
     "[English]", "[French]", "[Spanish]", "[German]", "[Italian]",
@@ -68,14 +68,21 @@ function referenceItems(records) {
     const items = [];
     for (const record of records ?? []) {
         const label = String(record?.token ?? "");
-        if (!/^<Picture\s+\d+>$/i.test(label)) continue;
-        items.push({kind:"picture", label, insertText:label, detail:"Connected H3 picture reference", priority:record.ordinal ?? 0});
+        const match = label.match(/^<(Picture|Video|Audio)\s+\d+>$/i);
+        if (!match) continue;
+        const kind = match[1].toLowerCase();
+        items.push({kind, label, insertText:label, detail:`Connected H3 ${kind} reference`, priority:record.ordinal ?? 0});
+    }
+    for (let index = 1; index <= 9; index += 1) {
+        items.push({kind:"picture", label:`<Picture ${index}>`, insertText:`<Picture ${index}>`, detail:"H3 reference picture label", priority:10 + index});
     }
     for (let index = 1; index <= 8; index += 1) {
         items.push({kind:"subject", label:`<Subject ${index}>`, insertText:`<Subject ${index}>`, detail:"H3 reusable visible subject", priority:20 + index});
     }
     for (let index = 1; index <= 3; index += 1) {
         items.push({kind:"video", label:`<Video ${index}>`, insertText:`<Video ${index}>`, detail:"H3 reference video label", priority:40 + index});
+    }
+    for (let index = 1; index <= 6; index += 1) {
         items.push({kind:"audio", label:`<Audio ${index}>`, insertText:`<Audio ${index}>`, detail:"H3 reference audio label", priority:50 + index});
     }
     items.push(

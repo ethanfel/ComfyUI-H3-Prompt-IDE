@@ -1,6 +1,6 @@
 [project]
 name = "comfyui-h3-prompt-ide"
-version = "0.2.0"
+version = "0.3.0"
 description = "Standalone rich H3 prompt editor and reference-input palette for ComfyUI"
 requires-python = ">=3.10"
 license = { text = "MIT" }

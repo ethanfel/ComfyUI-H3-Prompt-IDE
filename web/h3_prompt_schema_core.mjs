@@ -350,17 +350,29 @@ export function analyzeH3Prompt(value, selectedMode = "auto", options = {}) {
         }
     }
 
-    const connected = new Set((options.connectedPictures ?? []).map(Number));
+    const connected = new Set();
+    for (const reference of options.connectedReferences ?? []) {
+        const rawToken = typeof reference === "string" ? reference : reference?.token;
+        const match = String(rawToken ?? "").match(/^<(Picture|Video|Audio)\s+(\d+)>$/i);
+        if (match) connected.add(`<${match[1][0].toUpperCase()}${match[1].slice(1).toLowerCase()} ${Number(match[2])}>`);
+    }
+    for (const ordinal of options.connectedPictures ?? []) {
+        const value = Number(ordinal);
+        if (Number.isInteger(value)) connected.add(`<Picture ${value}>`);
+    }
+    const connectedPictures = new Set(
+        [...connected].filter((token) => token.startsWith("<Picture ")),
+    );
     const requiredPictures = mode === "fl2va" ? 2 : ["i2va", "l2va"].includes(mode) ? 1 : 0;
-    if (requiredPictures && connected.size < requiredPictures) {
+    if (requiredPictures && connectedPictures.size < requiredPictures) {
         problems.push({severity:"warning", code:"reference",
             message:`${h3ModeLabel(mode)} expects ${requiredPictures} connected picture reference${requiredPictures === 1 ? "" : "s"}`});
     }
-    const unresolvedPictures = [...text.matchAll(/<Picture\s+(\d+)>/gi)]
-        .map((match) => Number(match[1]))
-        .filter((ordinal, index, all) => !connected.has(ordinal) && all.indexOf(ordinal) === index);
-    for (const ordinal of unresolvedPictures) {
-        problems.push({severity:"warning", code:"reference", message:`<Picture ${ordinal}> has no connected authoring reference`});
+    const usedExternalReferences = [...text.matchAll(/<(Picture|Video|Audio)\s+(\d+)>/gi)]
+        .map((match) => `<${match[1][0].toUpperCase()}${match[1].slice(1).toLowerCase()} ${Number(match[2])}>`)
+        .filter((token, index, all) => all.indexOf(token) === index);
+    for (const token of usedExternalReferences.filter((item) => !connected.has(item))) {
+        problems.push({severity:"warning", code:"reference", message:`${token} has no connected authoring reference`});
     }
 
     return {

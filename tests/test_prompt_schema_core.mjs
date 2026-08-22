@@ -79,6 +79,21 @@ assert.ok(analyzeH3Prompt(`${base}\n<d>Hello</d>`, "t2va")
 assert.ok(analyzeH3Prompt(`${base}\n<scenetrans>`, "t2va")
     .problems.some((item) => item.code === "dialogue_flow"));
 
+const mediaReferences = `${base}\n<Picture 1> <Video 1> <Audio 1>`;
+assert.equal(analyzeH3Prompt(mediaReferences, "t2va", {
+    connectedReferences:[
+        {token:"<Picture 1>"},
+        {token:"<Video 1>"},
+        {token:"<Audio 1>"},
+    ],
+}).problems.filter((item) => item.code === "reference").length, 0);
+assert.deepEqual(analyzeH3Prompt(mediaReferences, "t2va")
+    .problems.filter((item) => item.code === "reference").map((item) => item.message), [
+        "<Picture 1> has no connected authoring reference",
+        "<Video 1> has no connected authoring reference",
+        "<Audio 1> has no connected authoring reference",
+    ]);
+
 assert.equal(validateH3TaskDirective("[video continuation + keyframe completion] target").valid, true);
 assert.equal(validateH3TaskDirective("[video editing + video continuation] target").valid, false);
 assert.equal(validateH3TaskDirective("[audio reuse + audio reference] target").valid, false);

@@ -8,6 +8,8 @@ import {
 const records = [
     {kind:"picture", token:"<Picture 1>", ordinal:1},
     {kind:"picture", token:"<Picture 2>", ordinal:2},
+    {kind:"video", token:"<Video 1>", ordinal:1},
+    {kind:"audio", token:"<Audio 1>", ordinal:1},
 ];
 
 assert.equal(promptCompletionQuery("Use @hero", 9), null);
@@ -17,7 +19,13 @@ assert.equal(promptCompletionQuery("Speaker (S", 10).trigger, "(");
 assert.equal(promptCompletionQuery("subject_def", 11).trigger, "section");
 
 const pictures = promptCompletionItems(promptCompletionQuery("<Pic", 4), records);
-assert.deepEqual(pictures.map((item) => item.label), ["<Picture 1>", "<Picture 2>"]);
+assert.deepEqual(pictures.map((item) => item.label), [
+    "<Picture 1>", "<Picture 2>", "<Picture 3>", "<Picture 4>", "<Picture 5>",
+    "<Picture 6>", "<Picture 7>", "<Picture 8>", "<Picture 9>",
+]);
+assert.match(pictures[0].detail, /Connected/);
+assert.match(promptCompletionItems(promptCompletionQuery("<Vid", 4), records)[0].detail, /Connected/);
+assert.match(promptCompletionItems(promptCompletionQuery("<Aud", 4), records)[0].detail, /Connected/);
 assert.ok(promptCompletionItems(promptCompletionQuery("<sce", 4), records)
     .some((item) => item.label === "<scenetrans>"));
 assert.ok(promptCompletionItems(promptCompletionQuery("<cut", 4), records)

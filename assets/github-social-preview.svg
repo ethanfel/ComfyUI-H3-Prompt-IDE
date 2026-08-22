@@ -56,7 +56,7 @@
       <text x="38" y="77" fill="#a1e8c9" font-size="17" font-weight="600">Plain text out</text>
       <rect x="178" y="52" width="188" height="38" rx="19" fill="#402b1e" stroke="#8d603c"/>
       <circle cx="200" cy="71" r="5" fill="#e8a468"/>
-      <text x="216" y="77" fill="#f1c99f" font-size="17" font-weight="600">Picture previews</text>
+      <text x="216" y="77" fill="#f1c99f" font-size="17" font-weight="600">Media previews</text>
     </g>
     <text x="70" y="543" fill="#687382" font-size="17" font-family="SFMono-Regular, Consolas, monospace">T2VA · I2VA · FL2VA · L2VA · Ref2VA</text>
   </g>

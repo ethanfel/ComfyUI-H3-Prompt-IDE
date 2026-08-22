@@ -1,13 +1,12 @@
 import {app} from "/scripts/app.js";
 import {api} from "/scripts/api.js";
 import {
-    pictureOrdinalFromInputName,
-    pictureToken,
     PromptUndoHistory,
+    referenceFromInputName,
     tokenizePrompt,
     undoDirection,
-} from "./h3_prompt_ide_core.mjs?v=0.2.0";
-import {createPromptCompletionController} from "./h3_prompt_completion_core.mjs?v=0.2.0";
+} from "./h3_prompt_ide_core.mjs?v=0.3.0";
+import {createPromptCompletionController} from "./h3_prompt_completion_core.mjs?v=0.3.0";
 import {
     analyzeH3Prompt,
     effectiveH3Mode,
@@ -15,7 +14,7 @@ import {
     H3_MODES,
     h3ModeLabel,
     insertH3Section,
-} from "./h3_prompt_schema_core.mjs?v=0.2.0";
+} from "./h3_prompt_schema_core.mjs?v=0.3.0";
 
 const EDITOR_NODE = "H3PromptIDE";
 const REFERENCES_NODE = "H3PromptReferenceInputs";
@@ -99,7 +98,9 @@ function injectStyles() {
       .h3ide-token-audio { color:var(--h3ide-audio); }
       .h3ide-token-subject { color:var(--h3ide-subject); }
       .h3ide-token-dialogue { color:var(--h3ide-dialogue); }
-      .h3ide-token-section { color:var(--h3ide-section); border-radius:4px; font-weight:750; }
+      .h3ide-token-section { display:inline; margin:0; padding:0; border:0; border-radius:0;
+        color:color-mix(in srgb,var(--h3ide-text) 82%,var(--h3ide-section)); background:none;
+        font-weight:650; cursor:text; user-select:text; }
       .h3ide-token-flow { color:var(--h3ide-flow); }
       .h3ide-token-speaker { color:var(--h3ide-speaker); }
       .h3ide-token-unresolved { color:var(--h3ide-danger); border-style:dashed; }
@@ -113,6 +114,8 @@ function injectStyles() {
       .h3ide-ref-card { justify-content:flex-start !important; min-width:0; text-align:left; }
       .h3ide-ref-card img { width:34px; height:34px; flex:0 0 34px; object-fit:cover; border-radius:4px;
         background:rgba(255,255,255,.08); }
+      .h3ide-ref-card > .h3ide-icon { width:34px; height:34px; flex-basis:34px; padding:7px;
+        border-radius:4px; background:rgba(255,255,255,.08); }
       .h3ide-ref-copy { min-width:0; overflow:hidden; }
       .h3ide-ref-name,.h3ide-ref-source { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
       .h3ide-ref-name { font-weight:700; }
@@ -259,17 +262,18 @@ function referenceRecords(editorNode) {
     if (!container) return [];
     const records = [];
     for (const input of container.inputs ?? []) {
-        const ordinal = pictureOrdinalFromInputName(input.name);
-        if (!ordinal || input.link == null) continue;
+        const reference = referenceFromInputName(input.name);
+        if (!reference || input.link == null) continue;
         const source = inputSource(container, input.name);
         records.push({
-            ordinal,
-            token:pictureToken(ordinal),
+            ...reference,
             source,
-            preview:findImagePreview(source),
+            preview:reference.kind === "audio" ? null : findImagePreview(source),
         });
     }
-    records.sort((left, right) => left.ordinal - right.ordinal);
+    const kindOrder = {picture:0, video:1, audio:2};
+    records.sort((left, right) => kindOrder[left.kind] - kindOrder[right.kind]
+        || left.ordinal - right.ordinal);
     return records;
 }
 
@@ -277,19 +281,19 @@ function referenceSignature(editorNode) {
     const container = referencesNode(editorNode);
     if (!container) return "";
     return (container.inputs ?? []).map((input) => {
-        const ordinal = pictureOrdinalFromInputName(input.name);
-        if (!ordinal) return "";
+        const reference = referenceFromInputName(input.name);
+        if (!reference) return "";
         const source = inputSource(container, input.name);
         const widgets = (source?.widgets ?? []).map((item) => String(item.value ?? "")).join("|");
-        return `${ordinal}:${input.link ?? ""}:${source?.id ?? ""}:${widgets}`;
+        return `${reference.token}:${input.link ?? ""}:${source?.id ?? ""}:${widgets}`;
     }).join(";");
 }
 
 function labelReferenceSockets(node) {
     if (nodeType(node) !== REFERENCES_NODE) return;
     for (const input of node.inputs ?? []) {
-        const ordinal = pictureOrdinalFromInputName(input.name);
-        if (ordinal) input.label = pictureToken(ordinal);
+        const reference = referenceFromInputName(input.name);
+        if (reference) input.label = reference.token;
     }
     node.graph?.setDirtyCanvas?.(true, false);
 }
@@ -471,7 +475,7 @@ function mountEditor(node) {
         state.analysis = analyzeH3Prompt(text, state.mode, {
             duration:state.duration,
             finalShot:state.finalShot,
-            connectedPictures:state.records.map((item) => item.ordinal),
+            connectedReferences:state.records,
         });
         const errors = state.analysis.problems.filter((item) => item.severity === "error").length;
         const warnings = state.analysis.problems.length - errors;
@@ -488,18 +492,23 @@ function mountEditor(node) {
         const token = element("span", `h3ide-token h3ide-token-${part.kind}`);
         token.contentEditable = "false";
         token.dataset.token = part.text;
-        const record = part.kind === "picture"
-            ? state.records.find((item) => item.ordinal === part.ordinal) : null;
+        const record = part.type === "reference"
+            ? state.records.find((item) => item.kind === part.kind && item.ordinal === part.ordinal)
+            : null;
         if (part.unresolved) token.classList.add("h3ide-token-unresolved");
-        if (record?.preview) {
+        if (part.type === "section") {
+            token.append(element("span", "h3ide-token-label", part.text));
+        } else if (record?.preview) {
             const thumb = element("img", "h3ide-token-thumb");
             thumb.src = record.preview;
             thumb.alt = "";
             token.append(thumb);
-        } else token.append(icon(part.kind));
-        token.append(element("span", "h3ide-token-label", part.text));
+        } else {
+            token.append(icon(part.kind));
+            token.append(element("span", "h3ide-token-label", part.text));
+        }
         token.title = part.unresolved
-            ? part.kind === "picture"
+            ? part.type === "reference"
                 ? `${part.text} is not connected on H3 Reference Inputs`
                 : `Use the exact H3 spelling and capitalization for ${part.text}`
             : part.kind === "section" ? `H3 section · ${part.section}` : part.text;
@@ -507,9 +516,8 @@ function mountEditor(node) {
     }
 
     function renderText(text, caret = null) {
-        const connected = state.records.map((item) => item.ordinal);
         const fragment = document.createDocumentFragment();
-        for (const part of tokenizePrompt(text, connected)) fragment.append(makeToken(part));
+        for (const part of tokenizePrompt(text, state.records)) fragment.append(makeToken(part));
         state.editor.replaceChildren(fragment);
         if (caret != null) restoreCaret(state.editor, caret);
         updateFooter();
@@ -551,14 +559,14 @@ function mountEditor(node) {
         if (!referencesNode(node)) {
             state.tray.append(element(
                 "div", "h3ide-ref-help",
-                "Connect an H3 Reference Inputs node to use picture tokens and previews.",
+                "Connect an H3 Reference Inputs node to use picture, video, and audio tokens.",
             ));
             return;
         }
         if (!state.records.length) {
             state.tray.append(element(
                 "div", "h3ide-ref-help",
-                "Connect a picture to <Picture 1>; the next H3-numbered socket appears automatically.",
+                "Connect media to <Picture 1>, <Video 1>, or <Audio 1>; each group grows automatically.",
             ));
             return;
         }
@@ -574,11 +582,11 @@ function mountEditor(node) {
                 image.src = record.preview;
                 image.alt = "";
                 card.append(image);
-            } else card.append(icon("picture"));
+            } else card.append(icon(record.kind));
             const copy = element("span", "h3ide-ref-copy");
             copy.append(
                 element("div", "h3ide-ref-name", record.token),
-                element("div", "h3ide-ref-source", record.source?.title || nodeType(record.source) || "Connected image"),
+                element("div", "h3ide-ref-source", record.source?.title || nodeType(record.source) || `Connected ${record.kind}`),
             );
             card.append(copy);
             state.tray.append(card);
@@ -629,7 +637,7 @@ function mountEditor(node) {
         const text = state.editor ? editorPlainText(state.editor) : state.lastWidgetValue;
         const analysis = state.analysis ?? analyzeH3Prompt(text, state.mode, {
             ...structureOptions(),
-            connectedPictures:state.records.map((item) => item.ordinal),
+            connectedReferences:state.records,
         });
         state.structure.replaceChildren();
         const head = element("div", "h3ide-structure-head");
@@ -750,9 +758,13 @@ function mountEditor(node) {
         const mode = state.analysis?.mode ?? effectiveH3Mode(text, state.mode);
         const health = state.analysis?.valid ? "schema valid"
             : `${state.analysis?.problems.filter((item) => item.severity === "error").length ?? 0} errors`;
-        const pictures = referencesNode(node)
-            ? `${state.records.length} picture${state.records.length === 1 ? "" : "s"}` : "no refs";
-        context.textContent = `${h3ModeLabel(mode)} · ${health} · ${pictures} · STRING`;
+        const references = referencesNode(node)
+            ? ["picture", "video", "audio"].map((kind) => {
+                const count = state.records.filter((item) => item.kind === kind).length;
+                return count ? `${count} ${kind}${count === 1 ? "" : "s"}` : null;
+            }).filter(Boolean).join(" · ") || "0 refs"
+            : "no refs";
+        context.textContent = `${h3ModeLabel(mode)} · ${health} · ${references} · STRING`;
     }
 
     const head = element("div", "h3ide-head");
@@ -783,7 +795,7 @@ function mountEditor(node) {
         if (state.structureOpen) renderStructurePanel();
         dirty();
     }, "section");
-    const refsButton = button("References", "Show H3 picture references", () => {
+    const refsButton = button("References", "Show H3 picture, video, and audio references", () => {
         state.trayOpen = !state.trayOpen;
         node.properties[TRAY_PROPERTY] = state.trayOpen;
         state.tray.classList.toggle("h3ide-open", state.trayOpen);
@@ -834,7 +846,7 @@ function mountEditor(node) {
     state.editor.tabIndex = 0;
     state.editor.setAttribute("role", "textbox");
     state.editor.setAttribute("aria-multiline", "true");
-    state.editor.dataset.placeholder = "Write a prompt. Use References to insert <Picture 1>, or Dialogue for <d>…</d>.";
+    state.editor.dataset.placeholder = "Write a prompt. Use References to insert <Picture 1>, <Video 1>, or <Audio 1>.";
     state.editor.addEventListener("input", (event) => {
         writeWidget(editorPlainText(state.editor), event);
         state.completion?.refresh();
