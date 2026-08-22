@@ -5,9 +5,9 @@ import {
     referenceFromInputName,
     tokenizePrompt,
     undoDirection,
-} from "./h3_prompt_ide_core.mjs?v=0.5.0";
-import {createPromptCompletionController} from "./h3_prompt_completion_core.mjs?v=0.5.0";
-import {repairLegacyWidgetWidth} from "./h3_legacy_widget_width.mjs?v=0.5.0";
+} from "./h3_prompt_ide_core.mjs?v=0.5.1";
+import {createPromptCompletionController} from "./h3_prompt_completion_core.mjs?v=0.5.1";
+import {repairLegacyWidgetWidth} from "./h3_legacy_widget_width.mjs?v=0.5.1";
 import {
     analyzeH3Prompt,
     effectiveH3Mode,
@@ -15,7 +15,7 @@ import {
     H3_MODES,
     h3ModeLabel,
     insertH3Section,
-} from "./h3_prompt_schema_core.mjs?v=0.5.0";
+} from "./h3_prompt_schema_core.mjs?v=0.5.1";
 
 const EDITOR_NODE = "H3PromptIDE";
 const REFERENCES_NODE = "H3PromptReferenceInputs";

@@ -44,7 +44,7 @@ class H3PromptReferenceInputs(io.ComfyNode):
                 ),
             ),
             names=PICTURE_NAMES,
-            min=1,
+            min=0,
         )
         videos = io.Autogrow.TemplateNames(
             input=io.Image.Input(
@@ -56,7 +56,7 @@ class H3PromptReferenceInputs(io.ComfyNode):
                 ),
             ),
             names=VIDEO_NAMES,
-            min=1,
+            min=0,
         )
         audios = io.Autogrow.TemplateNames(
             input=io.Audio.Input(
@@ -68,7 +68,7 @@ class H3PromptReferenceInputs(io.ComfyNode):
                 ),
             ),
             names=AUDIO_NAMES,
-            min=1,
+            min=0,
         )
         return io.Schema(
             node_id="H3PromptReferenceInputs",
@@ -88,6 +88,7 @@ class H3PromptReferenceInputs(io.ComfyNode):
             inputs=[
                 io.Autogrow.Input(
                     "pictures",
+                    optional=True,
                     template=pictures,
                     tooltip=(
                         "Up to nine prompt reference pictures, numbered in "
@@ -96,6 +97,7 @@ class H3PromptReferenceInputs(io.ComfyNode):
                 ),
                 io.Autogrow.Input(
                     "videos",
+                    optional=True,
                     template=videos,
                     tooltip=(
                         "Up to three reference video frame batches, numbered "
@@ -104,6 +106,7 @@ class H3PromptReferenceInputs(io.ComfyNode):
                 ),
                 io.Autogrow.Input(
                     "audios",
+                    optional=True,
                     template=audios,
                     tooltip=(
                         "Up to six emitted H3 audio labels: video soundtracks "

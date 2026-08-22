@@ -41,6 +41,16 @@ def test_reference_bundle_uses_h3_media_order():
     ]
 
 
+def test_reference_bundle_allows_every_media_group_to_be_empty():
+    bundle = output_values(H3PromptReferenceInputs.execute())[0]
+    assert bundle == {
+        "pictures": [],
+        "videos": [],
+        "audios": [],
+        "references": [],
+    }
+
+
 def test_h3_exposes_native_media_names():
     assert PICTURE_NAMES == [f"<Picture {index}>" for index in range(1, 10)]
     assert VIDEO_NAMES == [f"<Video {index}>" for index in range(1, 4)]
@@ -49,15 +59,17 @@ def test_h3_exposes_native_media_names():
 
 def test_schema_uses_h3_names_and_one_raw_authoring_link():
     reference_inputs = H3PromptReferenceInputs.INPUT_TYPES()
-    assert set(reference_inputs["required"]) == {"pictures", "videos", "audios"}
+    assert set(reference_inputs.get("required", {})) == set()
+    assert set(reference_inputs["optional"]) == {"pictures", "videos", "audios"}
     expected_names = {
         "pictures": PICTURE_NAMES,
         "videos": VIDEO_NAMES,
         "audios": AUDIO_NAMES,
     }
     for group, names in expected_names.items():
-        template = reference_inputs["required"][group][1]["template"]
+        template = reference_inputs["optional"][group][1]["template"]
         assert template["names"] == names
+        assert template["min"] == 0
         assert not any(name.startswith("ref_") for name in template["names"])
 
     editor_inputs = H3PromptIDE.INPUT_TYPES()
