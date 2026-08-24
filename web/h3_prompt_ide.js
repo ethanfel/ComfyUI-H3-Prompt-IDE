@@ -8,9 +8,9 @@ import {
     referenceFromInputName,
     tokenizePrompt,
     undoDirection,
-} from "./h3_prompt_ide_core.mjs?v=0.8.3";
-import {createPromptCompletionController} from "./h3_prompt_completion_core.mjs?v=0.8.3";
-import {repairLegacyWidgetWidth} from "./h3_legacy_widget_width.mjs?v=0.8.3";
+} from "./h3_prompt_ide_core.mjs?v=0.8.4";
+import {createPromptCompletionController} from "./h3_prompt_completion_core.mjs?v=0.8.4";
+import {repairLegacyWidgetWidth} from "./h3_legacy_widget_width.mjs?v=0.8.4";
 import {
     analyzeH3Prompt,
     effectiveH3Mode,
@@ -18,7 +18,7 @@ import {
     H3_MODES,
     h3ModeLabel,
     insertH3Section,
-} from "./h3_prompt_schema_core.mjs?v=0.8.3";
+} from "./h3_prompt_schema_core.mjs?v=0.8.4";
 
 // Standalone adaptation of the Rich Scene Prompt Editor originally authored
 // for ethanfel/ComfyUI-MiniMaxH3-Contex-Loop. Its rich reference presentation
@@ -486,6 +486,7 @@ function mountEditor(node) {
         mode:storedMode,
         editContext:null,
         editSignature:"",
+        editContextObserved:false,
         lastTaskTemplate:String(node.properties[TASK_TEMPLATE_PROPERTY] ?? ""),
         duration:Math.max(0.01, Number(node.properties[DURATION_PROPERTY]) || 6),
         finalShot:Math.max(1, Math.min(99, Math.trunc(Number(node.properties[FINAL_SHOT_PROPERTY]) || 1))),
@@ -949,20 +950,22 @@ function mountEditor(node) {
         return true;
     }
 
-    function refreshEditContext(force = false) {
+    function refreshEditContext(force = false, {allowTemplatePrompt = true} = {}) {
         const next = downstreamH3EditContext(node);
         const signature = next?.signature ?? "";
         const contextChanged = signature !== state.editSignature;
         if (!force && !contextChanged) return;
+        const mayPrompt = allowTemplatePrompt && state.editContextObserved;
         const previousMode = state.mode;
         const previousTemplate = editInstructionTemplate(state.editContext);
         const nextTemplate = editInstructionTemplate(next);
         state.editSignature = signature;
         state.editContext = next;
+        state.editContextObserved ||= Boolean(next);
         state.mode = next && !next.verbatim ? "edit" : state.manualMode;
         configureModeSelect();
         state.completion?.hide();
-        if (contextChanged && nextTemplate && nextTemplate !== previousTemplate
+        if (mayPrompt && contextChanged && nextTemplate && nextTemplate !== previousTemplate
             && applyEditTaskTemplate({askBeforeReplacing:true})) return;
         const message = next
             ? next.verbatim
@@ -1139,7 +1142,7 @@ function mountEditor(node) {
         const result = connectionsChanged?.apply(this, arguments);
         setTimeout(() => {
             refreshReferences(true);
-            refreshEditContext(true);
+            refreshEditContext(true, {allowTemplatePrompt:false});
         }, 0);
         return result;
     };
@@ -1155,7 +1158,7 @@ function mountEditor(node) {
         hidePromptWidget(promptWidget);
         synchronizeWidget();
         refreshReferences(true);
-        refreshEditContext(true);
+        refreshEditContext(true, {allowTemplatePrompt:false});
     };
     state.pollTimer = window.setInterval(() => {
         repairLegacyWidgetWidth(domWidget);
@@ -1166,7 +1169,7 @@ function mountEditor(node) {
 
     renderText(state.lastWidgetValue);
     refreshReferences(true);
-    refreshEditContext(true);
+    refreshEditContext(true, {allowTemplatePrompt:false});
     refreshHistoryButtons();
     updateHeader();
 }

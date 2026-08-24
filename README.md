@@ -52,8 +52,8 @@ intermediate camera travel.
 
 When a directed task or character-sheet profile is selected, the IDE loads a
 short task-specific starting instruction. Empty text and the previous generated
-template update automatically; if the editor contains custom text, the IDE asks
-before replacing it. **Task template** can restore the current task's starting
+template update automatically after a live task change; if the editor contains custom text, the IDE asks
+before replacing it. Loading or switching workflows only restores the detected task context and never opens a replacement confirmation. **Task template** can restore the current task's starting
 instruction at any time. Edit that short instruction directly—the downstream
 Edit encoder adds its full H3 task/timing wrapper. When the encoder uses `use
 prompt verbatim`, the IDE returns to the manually selected full H3 schema and
