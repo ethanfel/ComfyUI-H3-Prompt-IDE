@@ -2,7 +2,9 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import {
     audioToken,
+    canAutoReplaceEditInstruction,
     downstreamH3EditContext,
+    editInstructionTemplate,
     pictureOrdinalFromInputName,
     pictureToken,
     PromptUndoHistory,
@@ -94,6 +96,27 @@ assert.deepEqual(downstreamH3EditContext(editGraph({
     promptMode:"use prompt verbatim",
 }))?.mode, "auto");
 
+const anchoredCoverage = downstreamH3EditContext(editGraph({
+    promptMode:"directed | frozen scene coverage",
+    qualityProfile:"scene coverage | 243-frame camera path",
+}));
+assert.match(editInstructionTemplate(anchoredCoverage), /Freeze the complete physical scene/);
+assert.match(editInstructionTemplate(anchoredCoverage), /geometric center of the room/);
+assert.match(editInstructionTemplate(anchoredCoverage), /alternate views of this exact same scene/);
+const semanticCoverage = downstreamH3EditContext(editGraph({
+    promptMode:"directed | frozen scene coverage",
+    qualityProfile:"scene coverage | 243-frame camera path",
+    primaryImageRole:"generate | semantic Picture 1 (FL2VA)",
+}));
+assert.match(editInstructionTemplate(semanticCoverage), /completely new coherent room/);
+assert.match(editInstructionTemplate(semanticCoverage), /design references only/);
+assert.equal(editInstructionTemplate(downstreamH3EditContext(editGraph({
+    promptMode:"use prompt verbatim",
+}))), "");
+assert.equal(canAutoReplaceEditInstruction("", "old template"), true);
+assert.equal(canAutoReplaceEditInstruction("old template", "old template"), true);
+assert.equal(canAutoReplaceEditInstruction("my custom prompt", "old template"), false);
+
 const parts = tokenizePrompt(
     "Use <Picture 1>, <Picture 2>, <Video 1>, <Audio 1>, and <Audio 2>. <d>Hello</d>",
     [
@@ -151,6 +174,9 @@ assert.match(source, /repairLegacyWidgetWidth\(domWidget\)/);
 assert.match(source, /analyzeH3Prompt/);
 assert.match(source, /ensureH3Structure/);
 assert.match(source, /downstreamH3EditContext/);
+assert.match(source, /applyEditTaskTemplate/);
+assert.match(source, /"Task template"/);
+assert.match(source, /This replaces the current prompt text/);
 assert.match(source, /Edit encoder adds its full H3 timing and task wrapper downstream/);
 assert.match(source, /"Sections"/);
 assert.match(source, /element\("textarea", "h3ide-plain-editor"\)/);

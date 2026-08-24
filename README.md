@@ -40,10 +40,14 @@ exact multi-view timing, world-freeze contract, and first/final keyframe
 alignment. Semantic generation mode can therefore describe a completely new
 room without turning the IDE text into a full Ref2VA prompt manually.
 
-The integration changes only authoring context and validation. It never edits
-the prompt text. Write the short requested change in the IDE; the downstream
-Edit encoder adds its full H3 task/timing wrapper. When the encoder uses
-`use prompt verbatim`, the IDE returns to the manually selected full H3 schema.
+When a directed task or character-sheet profile is selected, the IDE loads a
+short task-specific starting instruction. Empty text and the previous generated
+template update automatically; if the editor contains custom text, the IDE asks
+before replacing it. **Task template** can restore the current task's starting
+instruction at any time. Edit that short instruction directly—the downstream
+Edit encoder adds its full H3 task/timing wrapper. When the encoder uses `use
+prompt verbatim`, the IDE returns to the manually selected full H3 schema and
+does not offer a task template.
 
 ## Nodes
 

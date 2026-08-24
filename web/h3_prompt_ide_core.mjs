@@ -1,7 +1,7 @@
 import {
     H3_ALL_SECTIONS,
     H3_MINIMAX_SPECIAL_TOKENS,
-} from "./h3_prompt_schema_core.mjs?v=0.8.0";
+} from "./h3_prompt_schema_core.mjs?v=0.8.1";
 
 export const H3_EDIT_ENCODER_NODE = "TextEncodeH3Edit";
 
@@ -96,6 +96,37 @@ export function downstreamH3EditContext(editorNode) {
         };
     }
     return null;
+}
+
+/**
+ * Return a concise, editable instruction for the selected H3 Edit task. The
+ * downstream encoder owns the full H3 schema, timing, and transport contracts.
+ */
+export function editInstructionTemplate(context) {
+    if (!context || context.verbatim) return "";
+    switch (context.task) {
+    case "repose":
+        return "Move the person in <Picture 1> into the body pose shown in <Picture 2>. Transfer only limb placement, torso and head orientation, hand positions, weight distribution, and expression. Preserve the identity, face, hairstyle, physique, wardrobe, scene, lighting, lens, framing, and camera position from <Picture 1>.";
+    case "character_swap":
+        return "Replace the person in <Picture 1> with the character from <Picture 2>. Transfer only the requested identity, face, hair, physique, wardrobe, and accessories. Preserve the source pose, placement, action, scene geometry, camera, perspective, lighting, shadows, and every unaffected object from <Picture 1>.";
+    case "new_angle":
+        return "Move the camera 45 degrees to camera right around the frozen subject at the same height, distance, and focal length. Preserve the subject identity, pose, expression, wardrobe, props, scene geometry, object placement, materials, colors, and lighting from <Picture 1>.";
+    case "character_sheet":
+        return "Use <Picture 1> for the character's identity and facial structure. Use each additional connected picture only for its explicitly assigned wardrobe, material, accessory, or appearance detail. Ignore every source background and source pose, then create one coherent full-body character for the turntable sheet.";
+    case "scene_coverage":
+        if (String(context.primaryImageRole ?? "").startsWith("generate |")) {
+            return "Create one completely new coherent room using <Picture 1> and any additional connected pictures as design references only. Combine their explicitly useful architecture, furniture, materials, palette, and lighting without copying any source composition. Establish the complete room first, freeze it, then orbit around its geometric center.";
+        }
+        return "Freeze the complete physical scene shown in <Picture 1>. Orbit around the geometric center of the room while keeping every person, object, wall, opening, fixture, material, and light source fixed in one shared world coordinate system. Treat any additional connected pictures as alternate views of this exact same scene.";
+    default:
+        return "";
+    }
+}
+
+export function canAutoReplaceEditInstruction(current, previousTemplate = "") {
+    const value = String(current ?? "").trim();
+    const previous = String(previousTemplate ?? "").trim();
+    return !value || Boolean(previous && value === previous);
 }
 
 export const H3_PICTURE_LIMIT = 9;

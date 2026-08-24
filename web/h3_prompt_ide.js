@@ -1,14 +1,16 @@
 import {app} from "/scripts/app.js";
 import {api} from "/scripts/api.js";
 import {
+    canAutoReplaceEditInstruction,
     downstreamH3EditContext,
+    editInstructionTemplate,
     PromptUndoHistory,
     referenceFromInputName,
     tokenizePrompt,
     undoDirection,
-} from "./h3_prompt_ide_core.mjs?v=0.8.0";
-import {createPromptCompletionController} from "./h3_prompt_completion_core.mjs?v=0.8.0";
-import {repairLegacyWidgetWidth} from "./h3_legacy_widget_width.mjs?v=0.8.0";
+} from "./h3_prompt_ide_core.mjs?v=0.8.1";
+import {createPromptCompletionController} from "./h3_prompt_completion_core.mjs?v=0.8.1";
+import {repairLegacyWidgetWidth} from "./h3_legacy_widget_width.mjs?v=0.8.1";
 import {
     analyzeH3Prompt,
     effectiveH3Mode,
@@ -16,7 +18,7 @@ import {
     H3_MODES,
     h3ModeLabel,
     insertH3Section,
-} from "./h3_prompt_schema_core.mjs?v=0.8.0";
+} from "./h3_prompt_schema_core.mjs?v=0.8.1";
 
 // Standalone adaptation of the Rich Scene Prompt Editor originally authored
 // for ethanfel/ComfyUI-MiniMaxH3-Contex-Loop. Its rich reference presentation
@@ -32,6 +34,7 @@ const MODE_PROPERTY = "h3_prompt_ide_mode";
 const DURATION_PROPERTY = "h3_prompt_ide_duration";
 const FINAL_SHOT_PROPERTY = "h3_prompt_ide_final_shot";
 const RICH_TEXT_PROPERTY = "h3_prompt_ide_rich_text";
+const TASK_TEMPLATE_PROPERTY = "h3_prompt_ide_last_task_template";
 const DEFAULT_FONT = 17;
 const MIN_FONT = 12;
 const MAX_FONT = 32;
@@ -483,6 +486,7 @@ function mountEditor(node) {
         mode:storedMode,
         editContext:null,
         editSignature:"",
+        lastTaskTemplate:String(node.properties[TASK_TEMPLATE_PROPERTY] ?? ""),
         duration:Math.max(0.01, Number(node.properties[DURATION_PROPERTY]) || 6),
         finalShot:Math.max(1, Math.min(99, Math.trunc(Number(node.properties[FINAL_SHOT_PROPERTY]) || 1))),
         richText:node.properties[RICH_TEXT_PROPERTY] !== false,
@@ -494,6 +498,7 @@ function mountEditor(node) {
     let shell;
     let presentationButton;
     let modeSelect;
+    let templateButton;
 
     function dirty() {
         node.graph?.setDirtyCanvas?.(true, true);
@@ -743,7 +748,7 @@ function mountEditor(node) {
                 head,
                 element(
                     "div", "h3ide-ref-help",
-                    "Write only the requested change. The connected Edit encoder adds its full H3 timing and task wrapper downstream; this IDE leaves your text untouched.",
+                    "Write only the requested change, or use Task template to load a task-specific starting instruction. The connected Edit encoder adds its full H3 timing and task wrapper downstream.",
                 ),
             );
             const problems = element("div", "h3ide-problems");
@@ -914,18 +919,51 @@ function mountEditor(node) {
             ?? "Write a prompt. Use References to insert <Picture 1>, <Video 1>, or <Audio 1>.";
         if (state.editor) state.editor.dataset.placeholder = placeholder;
         if (state.plainEditor) state.plainEditor.placeholder = placeholder;
+        if (templateButton) {
+            const template = editInstructionTemplate(state.editContext);
+            templateButton.disabled = !template;
+            templateButton.title = template
+                ? `Load the ${state.editContext.label} starting instruction`
+                : "A task template is available for directed Edit tasks";
+        }
+    }
+
+    function applyEditTaskTemplate({askBeforeReplacing = true} = {}) {
+        const template = editInstructionTemplate(state.editContext);
+        if (!template) return false;
+        const current = currentText();
+        if (current.trim() === template.trim()) return false;
+        if (askBeforeReplacing
+            && !canAutoReplaceEditInstruction(current, state.lastTaskTemplate)) {
+            const accepted = globalThis.confirm?.(
+                `Switch the instruction to “${state.editContext.label}”? This replaces the current prompt text.`,
+            ) ?? false;
+            if (!accepted) {
+                updateFooter(`${state.editContext.label} detected; current prompt kept`);
+                return false;
+            }
+        }
+        state.lastTaskTemplate = template;
+        node.properties[TASK_TEMPLATE_PROPERTY] = template;
+        replaceEditorText(template, template.length, `${state.editContext.label} template loaded`);
+        return true;
     }
 
     function refreshEditContext(force = false) {
         const next = downstreamH3EditContext(node);
         const signature = next?.signature ?? "";
-        if (!force && signature === state.editSignature) return;
+        const contextChanged = signature !== state.editSignature;
+        if (!force && !contextChanged) return;
         const previousMode = state.mode;
+        const previousTemplate = editInstructionTemplate(state.editContext);
+        const nextTemplate = editInstructionTemplate(next);
         state.editSignature = signature;
         state.editContext = next;
         state.mode = next && !next.verbatim ? "edit" : state.manualMode;
         configureModeSelect();
         state.completion?.hide();
+        if (contextChanged && nextTemplate && nextTemplate !== previousTemplate
+            && applyEditTaskTemplate({askBeforeReplacing:true})) return;
         const message = next
             ? next.verbatim
                 ? "Connected Edit encoder uses the prompt verbatim"
@@ -950,6 +988,12 @@ function mountEditor(node) {
         state.completion?.hide();
         dirty();
     });
+    templateButton = button(
+        "Task template",
+        "A task template is available for directed Edit tasks",
+        () => applyEditTaskTemplate({askBeforeReplacing:true}),
+    );
+    configureModeSelect();
     const sectionsButton = button("Sections", "Show strict H3 categories and validation", () => {
         state.structureOpen = !state.structureOpen;
         node.properties[STRUCTURE_PROPERTY] = state.structureOpen;
@@ -994,6 +1038,7 @@ function mountEditor(node) {
     });
     toolbar.append(
         modeSelect,
+        templateButton,
         sectionsButton,
         refsButton,
         dialogueButton,
