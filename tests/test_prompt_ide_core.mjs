@@ -76,6 +76,21 @@ assert.equal(downstreamH3EditContext(editGraph({
     qualityProfile:"character sheet | 6 panels / 124-frame orbit",
 }))?.label, "Character-sheet assignment");
 assert.deepEqual(downstreamH3EditContext(editGraph({
+    promptMode:"directed | frozen scene coverage",
+    qualityProfile:"scene coverage | 243-frame camera path",
+})), {
+    mode:"edit",
+    verbatim:false,
+    task:"scene_coverage",
+    label:"Frozen-scene coverage",
+    placeholder:"Describe the room to freeze or create, the orbit center, and any per-picture room-design roles.",
+    promptMode:"directed | frozen scene coverage",
+    qualityProfile:"scene coverage | 243-frame camera path",
+    primaryImageRole:"edit | strong scene anchor (FL2VA)",
+    targetId:22,
+    signature:"22\u001fdirected | frozen scene coverage\u001fscene coverage | 243-frame camera path\u001fedit | strong scene anchor (FL2VA)",
+});
+assert.deepEqual(downstreamH3EditContext(editGraph({
     promptMode:"use prompt verbatim",
 }))?.mode, "auto");
 

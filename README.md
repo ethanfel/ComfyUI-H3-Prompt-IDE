@@ -30,8 +30,15 @@ Connect the IDE's `text` output directly to the `prompt` input on
 [`TextEncodeH3Edit`](https://github.com/ethanfel/ComfyUI-MiniMax-H3-Edit).
 The schema selector automatically shows an **Edit** category and follows the
 encoder's current task: edit instruction, re-pose, character swap, new camera
-angle, or character-sheet assignment. Changing the task/profile on the Edit
+angle, character-sheet assignment, or frozen-scene coverage. Changing the task/profile on the Edit
 encoder updates the IDE context live.
+
+For frozen-scene coverage, use the IDE instruction to identify the room or
+scene, declare the orbit center, and assign each optional `<Picture N>` as an
+alternate angle or room-design reference. The connected encoder writes the
+exact multi-view timing, world-freeze contract, and first/final keyframe
+alignment. Semantic generation mode can therefore describe a completely new
+room without turning the IDE text into a full Ref2VA prompt manually.
 
 The integration changes only authoring context and validation. It never edits
 the prompt text. Write the short requested change in the IDE; the downstream

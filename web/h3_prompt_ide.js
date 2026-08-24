@@ -6,9 +6,9 @@ import {
     referenceFromInputName,
     tokenizePrompt,
     undoDirection,
-} from "./h3_prompt_ide_core.mjs?v=0.7.0";
-import {createPromptCompletionController} from "./h3_prompt_completion_core.mjs?v=0.7.0";
-import {repairLegacyWidgetWidth} from "./h3_legacy_widget_width.mjs?v=0.7.0";
+} from "./h3_prompt_ide_core.mjs?v=0.8.0";
+import {createPromptCompletionController} from "./h3_prompt_completion_core.mjs?v=0.8.0";
+import {repairLegacyWidgetWidth} from "./h3_legacy_widget_width.mjs?v=0.8.0";
 import {
     analyzeH3Prompt,
     effectiveH3Mode,
@@ -16,7 +16,7 @@ import {
     H3_MODES,
     h3ModeLabel,
     insertH3Section,
-} from "./h3_prompt_schema_core.mjs?v=0.7.0";
+} from "./h3_prompt_schema_core.mjs?v=0.8.0";
 
 // Standalone adaptation of the Rich Scene Prompt Editor originally authored
 // for ethanfel/ComfyUI-MiniMaxH3-Contex-Loop. Its rich reference presentation

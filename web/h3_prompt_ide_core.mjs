@@ -1,7 +1,7 @@
 import {
     H3_ALL_SECTIONS,
     H3_MINIMAX_SPECIAL_TOKENS,
-} from "./h3_prompt_schema_core.mjs?v=0.7.0";
+} from "./h3_prompt_schema_core.mjs?v=0.8.0";
 
 export const H3_EDIT_ENCODER_NODE = "TextEncodeH3Edit";
 
@@ -20,6 +20,11 @@ const EDIT_TASKS = Object.freeze({
         id:"new_angle",
         label:"New-angle instruction",
         placeholder:"Describe the requested camera move, framing, height, and focal-length constraints.",
+    }),
+    "directed | frozen scene coverage": Object.freeze({
+        id:"scene_coverage",
+        label:"Frozen-scene coverage",
+        placeholder:"Describe the room to freeze or create, the orbit center, and any per-picture room-design roles.",
     }),
 });
 
