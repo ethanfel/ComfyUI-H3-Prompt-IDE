@@ -40,11 +40,14 @@ function editGraph({
     primaryImageRole="edit | strong scene anchor (FL2VA)",
     inputName="prompt",
     targetType="TextEncodeH3Edit",
+    optionsMode=null,
+    optionsShowOverrides=false,
+    optionsProfileOverride="canonical for selected mode",
 } = {}) {
     const target = {
         id:22,
         type:targetType,
-        inputs:[{name:inputName}],
+        inputs:[{name:inputName}, {name:"options", link:optionsMode ? 8 : null}],
         widgets:[
             {name:"prompt_mode", value:promptMode},
             {name:"quality_profile", value:qualityProfile},
@@ -52,9 +55,22 @@ function editGraph({
         ],
     };
     const graph = {
-        links:{7:{id:7, origin_id:11, origin_slot:0, target_id:22, target_slot:0}},
-        getNodeById:(id) => id === 22 ? target : null,
+        links:{
+            7:{id:7, origin_id:11, origin_slot:0, target_id:22, target_slot:0},
+            8:{id:8, origin_id:33, origin_slot:0, target_id:22, target_slot:1},
+        },
+        getNodeById:(id) => id === 22 ? target : id === 33 ? {
+            id:33,
+            type:"H3EditOptions",
+            graph,
+            widgets:[
+                {name:"mode", value:optionsMode},
+                {name:"show_overrides", value:optionsShowOverrides},
+                {name:"profile_override", value:optionsProfileOverride},
+            ],
+        } : null,
     };
+    target.graph = graph;
     return {id:11, graph, outputs:[{name:"text", links:[7]}]};
 }
 
@@ -70,7 +86,7 @@ assert.deepEqual(downstreamH3EditContext(editGraph({
     qualityProfile:"recommended | 9-frame settle -> 1 image",
     primaryImageRole:"edit | strong scene anchor (FL2VA)",
     targetId:22,
-    signature:"22\u001fdirected | re-pose character\u001frecommended | 9-frame settle -> 1 image\u001fedit | strong scene anchor (FL2VA)",
+    signature:"22\u001fdirected | re-pose character\u001frecommended | 9-frame settle -> 1 image\u001fedit | strong scene anchor (FL2VA)\u001f\u001f",
 });
 assert.equal(downstreamH3EditContext(editGraph({inputName:"clip"})), null);
 assert.equal(downstreamH3EditContext(editGraph({targetType:"CLIPTextEncode"})), null);
@@ -90,7 +106,7 @@ assert.deepEqual(downstreamH3EditContext(editGraph({
     qualityProfile:"scene coverage | 243-frame camera path",
     primaryImageRole:"edit | strong scene anchor (FL2VA)",
     targetId:22,
-    signature:"22\u001fdirected | frozen scene coverage\u001fscene coverage | 243-frame camera path\u001fedit | strong scene anchor (FL2VA)",
+    signature:"22\u001fdirected | frozen scene coverage\u001fscene coverage | 243-frame camera path\u001fedit | strong scene anchor (FL2VA)\u001f\u001f",
 });
 assert.deepEqual(downstreamH3EditContext(editGraph({
     promptMode:"use prompt verbatim",
@@ -116,6 +132,16 @@ assert.equal(editInstructionTemplate(downstreamH3EditContext(editGraph({
 assert.equal(canAutoReplaceEditInstruction("", "old template"), true);
 assert.equal(canAutoReplaceEditInstruction("old template", "old template"), true);
 assert.equal(canAutoReplaceEditInstruction("my custom prompt", "old template"), false);
+
+const optionCoverage = downstreamH3EditContext(editGraph({
+    promptMode:"edit instruction",
+    qualityProfile:"experimental | true 1 frame (low quality)",
+    optionsMode:"scene coverage | canonical camera path",
+}));
+assert.equal(optionCoverage.task, "scene_coverage");
+assert.equal(optionCoverage.qualityProfile, "scene coverage | 124-frame camera path");
+assert.equal(optionCoverage.optionsMode, "scene coverage | canonical camera path");
+assert.match(editInstructionTemplate(optionCoverage), /Freeze the complete physical scene/);
 
 const parts = tokenizePrompt(
     "Use <Picture 1>, <Picture 2>, <Video 1>, <Audio 1>, and <Audio 2>. <d>Hello</d>",

@@ -1,9 +1,41 @@
 import {
     H3_ALL_SECTIONS,
     H3_MINIMAX_SPECIAL_TOKENS,
-} from "./h3_prompt_schema_core.mjs?v=0.8.1";
+} from "./h3_prompt_schema_core.mjs?v=0.8.2";
 
 export const H3_EDIT_ENCODER_NODE = "TextEncodeH3Edit";
+export const H3_EDIT_OPTIONS_NODE = "H3EditOptions";
+
+const EDIT_OPTION_PRESETS = Object.freeze({
+    "still | edit or generate": Object.freeze({
+        promptMode:"edit instruction",
+        qualityProfile:"recommended | 5-frame context -> 1 image",
+    }),
+    "directed | re-pose character": Object.freeze({
+        promptMode:"directed | re-pose character",
+        qualityProfile:"directed change | 39-frame settle -> 1 image",
+    }),
+    "directed | character swap": Object.freeze({
+        promptMode:"directed | character swap",
+        qualityProfile:"directed change | 39-frame settle -> 1 image",
+    }),
+    "directed | new camera angle": Object.freeze({
+        promptMode:"directed | new camera angle",
+        qualityProfile:"directed change | 39-frame settle -> 1 image",
+    }),
+    "character sheet | canonical 6 views": Object.freeze({
+        promptMode:"edit instruction",
+        qualityProfile:"character sheet | 6 panels / 124-frame orbit",
+    }),
+    "scene coverage | canonical camera path": Object.freeze({
+        promptMode:"directed | frozen scene coverage",
+        qualityProfile:"scene coverage | 124-frame camera path",
+    }),
+    "advanced | prompt verbatim": Object.freeze({
+        promptMode:"use prompt verbatim",
+        qualityProfile:"recommended | 5-frame context -> 1 image",
+    }),
+});
 
 const EDIT_TASKS = Object.freeze({
     "directed | re-pose character": Object.freeze({
@@ -38,6 +70,27 @@ function widgetValue(node, name) {
 
 function graphLink(graph, link) {
     return link && typeof link === "object" ? link : graph?.links?.[link] ?? null;
+}
+
+function inputSource(node, name) {
+    const input = node?.inputs?.find((item) => item.name === name);
+    const link = graphLink(node?.graph, input?.link);
+    return link ? node.graph?.getNodeById?.(link.origin_id) ?? null : null;
+}
+
+function editOptionPreset(target) {
+    const source = inputSource(target, "options");
+    if (nodeType(source) !== H3_EDIT_OPTIONS_NODE) return null;
+    const mode = String(widgetValue(source, "mode") ?? "");
+    const preset = EDIT_OPTION_PRESETS[mode];
+    if (!preset) return null;
+    const showOverrides = Boolean(widgetValue(source, "show_overrides"));
+    const profileOverride = String(widgetValue(source, "profile_override") ?? "");
+    const qualityProfile = showOverrides
+        && profileOverride
+        && profileOverride !== "canonical for selected mode"
+        ? profileOverride : preset.qualityProfile;
+    return {source, mode, promptMode:preset.promptMode, qualityProfile};
 }
 
 function editTask(promptMode, qualityProfile) {
@@ -75,8 +128,11 @@ export function downstreamH3EditContext(editorNode) {
         const input = target?.inputs?.[Number(link.target_slot)];
         if (input?.name !== "prompt") continue;
 
-        const promptMode = String(widgetValue(target, "prompt_mode") ?? "edit instruction");
-        const qualityProfile = String(widgetValue(target, "quality_profile") ?? "");
+        const optionPreset = editOptionPreset(target);
+        const promptMode = optionPreset?.promptMode
+            ?? String(widgetValue(target, "prompt_mode") ?? "edit instruction");
+        const qualityProfile = optionPreset?.qualityProfile
+            ?? String(widgetValue(target, "quality_profile") ?? "");
         const primaryImageRole = String(widgetValue(target, "primary_image_role") ?? "");
         const verbatim = promptMode === "use prompt verbatim";
         const task = editTask(promptMode, qualityProfile);
@@ -92,7 +148,15 @@ export function downstreamH3EditContext(editorNode) {
             qualityProfile,
             primaryImageRole,
             targetId:target.id,
-            signature:[target.id, promptMode, qualityProfile, primaryImageRole].join("\u001f"),
+            signature:[
+                target.id,
+                promptMode,
+                qualityProfile,
+                primaryImageRole,
+                optionPreset?.source?.id ?? "",
+                optionPreset?.mode ?? "",
+            ].join("\u001f"),
+            ...(optionPreset ? {optionsMode:optionPreset.mode} : {}),
         };
     }
     return null;

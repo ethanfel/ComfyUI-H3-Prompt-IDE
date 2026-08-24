@@ -33,6 +33,11 @@ encoder's current task: edit instruction, re-pose, character swap, new camera
 angle, character-sheet assignment, or frozen-scene coverage. Changing the task/profile on the Edit
 encoder updates the IDE context live.
 
+With MiniMax H3 Edit 0.9.0 or later, connect **H3 Edit Options** to the encoder
+and choose one canonical `mode`. Prompt IDE reads that Options node directly,
+so changing only its mode updates the visible instruction; the encoder's hidden
+legacy task/profile values cannot leave the IDE in the wrong category.
+
 For frozen-scene coverage, use the IDE instruction to identify the room or
 scene, declare the orbit center, and assign each optional `<Picture N>` as an
 alternate angle or room-design reference. The connected encoder writes the
