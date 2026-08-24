@@ -1,7 +1,7 @@
 import {
     H3_ALL_SECTIONS,
     H3_MINIMAX_SPECIAL_TOKENS,
-} from "./h3_prompt_schema_core.mjs?v=0.8.2";
+} from "./h3_prompt_schema_core.mjs?v=0.8.3";
 
 export const H3_EDIT_ENCODER_NODE = "TextEncodeH3Edit";
 export const H3_EDIT_OPTIONS_NODE = "H3EditOptions";
@@ -31,6 +31,10 @@ const EDIT_OPTION_PRESETS = Object.freeze({
         promptMode:"directed | frozen scene coverage",
         qualityProfile:"scene coverage | 124-frame camera path",
     }),
+    "scene coverage | cinematic hard cuts": Object.freeze({
+        promptMode:"directed | frozen cinematic cuts",
+        qualityProfile:"scene coverage | 124-frame camera path",
+    }),
     "advanced | prompt verbatim": Object.freeze({
         promptMode:"use prompt verbatim",
         qualityProfile:"recommended | 5-frame context -> 1 image",
@@ -57,6 +61,11 @@ const EDIT_TASKS = Object.freeze({
         id:"scene_coverage",
         label:"Frozen-scene coverage",
         placeholder:"Describe the room to freeze or create, the orbit center, and any per-picture room-design roles.",
+    }),
+    "directed | frozen cinematic cuts": Object.freeze({
+        id:"scene_cuts",
+        label:"Cinematic scene cuts",
+        placeholder:"Name one exact person, object, or fixed point as the coverage target for every camera cut.",
     }),
 });
 
@@ -182,6 +191,11 @@ export function editInstructionTemplate(context) {
             return "Create one completely new coherent room using <Picture 1> and any additional connected pictures as design references only. Combine their explicitly useful architecture, furniture, materials, palette, and lighting without copying any source composition. Establish the complete room first, freeze it, then orbit around its geometric center.";
         }
         return "Freeze the complete physical scene shown in <Picture 1>. Orbit around the geometric center of the room while keeping every person, object, wall, opening, fixture, material, and light source fixed in one shared world coordinate system. Treat any additional connected pictures as alternate views of this exact same scene.";
+    case "scene_cuts":
+        if (String(context.primaryImageRole ?? "").startsWith("generate |")) {
+            return "Create one completely new coherent scene using <Picture 1> and any additional connected pictures as design references only. Coverage target: the primary person or object in the generated scene. Establish the complete scene first, freeze every subject and object, then use instantaneous hard cuts to capture distinct cinematic viewpoints around that exact target.";
+        }
+        return "Coverage target: the primary person or object in <Picture 1>. Freeze the complete physical scene, including the target's exact pose, expression, wardrobe, surrounding objects, geometry, materials, lighting, and shadows. Use instantaneous hard cuts to capture distinct cinematic viewpoints around that exact target; never animate the scene or show camera travel between views.";
     default:
         return "";
     }

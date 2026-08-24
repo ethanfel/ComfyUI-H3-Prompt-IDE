@@ -143,6 +143,19 @@ assert.equal(optionCoverage.qualityProfile, "scene coverage | 124-frame camera p
 assert.equal(optionCoverage.optionsMode, "scene coverage | canonical camera path");
 assert.match(editInstructionTemplate(optionCoverage), /Freeze the complete physical scene/);
 
+const optionCinematicCuts = downstreamH3EditContext(editGraph({
+    promptMode:"edit instruction",
+    qualityProfile:"experimental | true 1 frame (low quality)",
+    optionsMode:"scene coverage | cinematic hard cuts",
+}));
+assert.equal(optionCinematicCuts.task, "scene_cuts");
+assert.equal(optionCinematicCuts.label, "Cinematic scene cuts");
+assert.equal(optionCinematicCuts.promptMode, "directed | frozen cinematic cuts");
+assert.equal(optionCinematicCuts.qualityProfile, "scene coverage | 124-frame camera path");
+assert.match(editInstructionTemplate(optionCinematicCuts), /Coverage target:/);
+assert.match(editInstructionTemplate(optionCinematicCuts), /instantaneous hard cuts/);
+assert.match(editInstructionTemplate(optionCinematicCuts), /never animate the scene/);
+
 const parts = tokenizePrompt(
     "Use <Picture 1>, <Picture 2>, <Video 1>, <Audio 1>, and <Audio 2>. <d>Hello</d>",
     [

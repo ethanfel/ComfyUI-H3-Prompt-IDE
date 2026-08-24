@@ -30,10 +30,10 @@ Connect the IDE's `text` output directly to the `prompt` input on
 [`TextEncodeH3Edit`](https://github.com/ethanfel/ComfyUI-MiniMax-H3-Edit).
 The schema selector automatically shows an **Edit** category and follows the
 encoder's current task: edit instruction, re-pose, character swap, new camera
-angle, character-sheet assignment, or frozen-scene coverage. Changing the task/profile on the Edit
+angle, character-sheet assignment, continuous frozen-scene coverage, or cinematic frozen-scene cuts. Changing the task/profile on the Edit
 encoder updates the IDE context live.
 
-With MiniMax H3 Edit 0.9.0 or later, connect **H3 Edit Options** to the encoder
+With MiniMax H3 Edit 0.10.0 or later, connect **H3 Edit Options** to the encoder
 and choose one canonical `mode`. Prompt IDE reads that Options node directly,
 so changing only its mode updates the visible instruction; the encoder's hidden
 legacy task/profile values cannot leave the IDE in the wrong category.
@@ -44,6 +44,11 @@ alternate angle or room-design reference. The connected encoder writes the
 exact multi-view timing, world-freeze contract, and first/final keyframe
 alignment. Semantic generation mode can therefore describe a completely new
 room without turning the IDE text into a full Ref2VA prompt manually.
+
+For cinematic cuts, name one exact visible person, object, architectural
+feature, or fixed point as the coverage target. The Edit encoder turns that
+short instruction into eight timed static shots with true hard cuts and no
+intermediate camera travel.
 
 When a directed task or character-sheet profile is selected, the IDE loads a
 short task-specific starting instruction. Empty text and the previous generated
