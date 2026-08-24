@@ -1,7 +1,97 @@
 import {
     H3_ALL_SECTIONS,
     H3_MINIMAX_SPECIAL_TOKENS,
-} from "./h3_prompt_schema_core.mjs?v=0.6.0";
+} from "./h3_prompt_schema_core.mjs?v=0.7.0";
+
+export const H3_EDIT_ENCODER_NODE = "TextEncodeH3Edit";
+
+const EDIT_TASKS = Object.freeze({
+    "directed | re-pose character": Object.freeze({
+        id:"repose",
+        label:"Re-pose instruction",
+        placeholder:"Describe only the pose transfer. Name the guide picture and what must stay unchanged.",
+    }),
+    "directed | character swap": Object.freeze({
+        id:"character_swap",
+        label:"Character-swap instruction",
+        placeholder:"Describe the donor character to use and which scene, framing, and action must stay unchanged.",
+    }),
+    "directed | new camera angle": Object.freeze({
+        id:"new_angle",
+        label:"New-angle instruction",
+        placeholder:"Describe the requested camera move, framing, height, and focal-length constraints.",
+    }),
+});
+
+function nodeType(node) {
+    return node?.comfyClass ?? node?.type ?? null;
+}
+
+function widgetValue(node, name) {
+    return node?.widgets?.find((widget) => widget.name === name)?.value;
+}
+
+function graphLink(graph, link) {
+    return link && typeof link === "object" ? link : graph?.links?.[link] ?? null;
+}
+
+function editTask(promptMode, qualityProfile) {
+    if (String(qualityProfile ?? "").startsWith("character sheet |")) {
+        return {
+            id:"character_sheet",
+            label:"Character-sheet assignment",
+            placeholder:"Assign every connected picture a precise identity, wardrobe, pose, or appearance role.",
+        };
+    }
+    return EDIT_TASKS[promptMode] ?? {
+        id:"edit",
+        label:"Edit instruction",
+        placeholder:"Describe only the requested change and what must remain unchanged.",
+    };
+}
+
+/**
+ * Inspect an H3 Prompt IDE STRING output for a direct connection to the prompt
+ * socket of TextEncodeH3Edit. The returned context is authoring metadata only;
+ * it never rewrites or serializes the user's prompt.
+ */
+export function downstreamH3EditContext(editorNode) {
+    const graph = editorNode?.graph;
+    const output = editorNode?.outputs?.find((item) => item.name === "text")
+        ?? editorNode?.outputs?.[0];
+    const links = (output?.links ?? [])
+        .map((link) => graphLink(graph, link))
+        .filter(Boolean)
+        .sort((left, right) => Number(left.id ?? 0) - Number(right.id ?? 0));
+
+    for (const link of links) {
+        const target = graph?.getNodeById?.(link.target_id) ?? null;
+        if (nodeType(target) !== H3_EDIT_ENCODER_NODE) continue;
+        const input = target?.inputs?.[Number(link.target_slot)];
+        if (input?.name !== "prompt") continue;
+
+        const promptMode = String(widgetValue(target, "prompt_mode") ?? "edit instruction");
+        const qualityProfile = String(widgetValue(target, "quality_profile") ?? "");
+        const primaryImageRole = String(widgetValue(target, "primary_image_role") ?? "");
+        const verbatim = promptMode === "use prompt verbatim";
+        const task = editTask(promptMode, qualityProfile);
+        return {
+            mode:verbatim ? "auto" : "edit",
+            verbatim,
+            task:task.id,
+            label:verbatim ? "Verbatim H3 prompt" : task.label,
+            placeholder:verbatim
+                ? "Write the complete H3 prompt expected by the downstream encoder."
+                : task.placeholder,
+            promptMode,
+            qualityProfile,
+            primaryImageRole,
+            targetId:target.id,
+            signature:[target.id, promptMode, qualityProfile, primaryImageRole].join("\u001f"),
+        };
+    }
+    return null;
+}
 
 export const H3_PICTURE_LIMIT = 9;
 export const H3_VIDEO_LIMIT = 3;

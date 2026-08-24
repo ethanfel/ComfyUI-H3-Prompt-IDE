@@ -1,13 +1,14 @@
 import {app} from "/scripts/app.js";
 import {api} from "/scripts/api.js";
 import {
+    downstreamH3EditContext,
     PromptUndoHistory,
     referenceFromInputName,
     tokenizePrompt,
     undoDirection,
-} from "./h3_prompt_ide_core.mjs?v=0.6.0";
-import {createPromptCompletionController} from "./h3_prompt_completion_core.mjs?v=0.6.0";
-import {repairLegacyWidgetWidth} from "./h3_legacy_widget_width.mjs?v=0.6.0";
+} from "./h3_prompt_ide_core.mjs?v=0.7.0";
+import {createPromptCompletionController} from "./h3_prompt_completion_core.mjs?v=0.7.0";
+import {repairLegacyWidgetWidth} from "./h3_legacy_widget_width.mjs?v=0.7.0";
 import {
     analyzeH3Prompt,
     effectiveH3Mode,
@@ -15,7 +16,7 @@ import {
     H3_MODES,
     h3ModeLabel,
     insertH3Section,
-} from "./h3_prompt_schema_core.mjs?v=0.6.0";
+} from "./h3_prompt_schema_core.mjs?v=0.7.0";
 
 // Standalone adaptation of the Rich Scene Prompt Editor originally authored
 // for ethanfel/ComfyUI-MiniMaxH3-Contex-Loop. Its rich reference presentation
@@ -460,6 +461,10 @@ function mountEditor(node) {
     }
     root.addEventListener("wheel", (event) => event.stopPropagation());
 
+    const storedMode = H3_MODES.some(
+        (item) => !item.contextOnly && item.id === node.properties[MODE_PROPERTY],
+    ) ? node.properties[MODE_PROPERTY] : "auto";
+
     const state = {
         editor:null,
         plainEditor:null,
@@ -474,8 +479,10 @@ function mountEditor(node) {
         fontSize:clampFont(node.properties[FONT_PROPERTY]),
         trayOpen:Boolean(node.properties[TRAY_PROPERTY]),
         structureOpen:Boolean(node.properties[STRUCTURE_PROPERTY]),
-        mode:H3_MODES.some((item) => item.id === node.properties[MODE_PROPERTY])
-            ? node.properties[MODE_PROPERTY] : "auto",
+        manualMode:storedMode,
+        mode:storedMode,
+        editContext:null,
+        editSignature:"",
         duration:Math.max(0.01, Number(node.properties[DURATION_PROPERTY]) || 6),
         finalShot:Math.max(1, Math.min(99, Math.trunc(Number(node.properties[FINAL_SHOT_PROPERTY]) || 1))),
         richText:node.properties[RICH_TEXT_PROPERTY] !== false,
@@ -486,6 +493,7 @@ function mountEditor(node) {
     node._h3PromptIdeState = state;
     let shell;
     let presentationButton;
+    let modeSelect;
 
     function dirty() {
         node.graph?.setDirtyCanvas?.(true, true);
@@ -549,8 +557,10 @@ function mountEditor(node) {
         });
         const errors = state.analysis.problems.filter((item) => item.severity === "error").length;
         const warnings = state.analysis.problems.length - errors;
-        const health = errors ? `${errors} structure error${errors === 1 ? "" : "s"}`
-            : warnings ? `${warnings} warning${warnings === 1 ? "" : "s"}` : "H3 structure valid";
+        const errorKind = state.analysis.mode === "edit" ? "instruction" : "structure";
+        const health = errors ? `${errors} ${errorKind} error${errors === 1 ? "" : "s"}`
+            : warnings ? `${warnings} warning${warnings === 1 ? "" : "s"}`
+                : state.analysis.mode === "edit" ? "Edit instruction valid" : "H3 structure valid";
         if (state.counts) state.counts.textContent = `${words} words · ${text.length} chars`;
         if (state.status) state.status.textContent = `${message} · ${health}`;
         if (state.structure) renderStructurePanel();
@@ -725,6 +735,29 @@ function mountEditor(node) {
             connectedReferences:state.records,
         });
         state.structure.replaceChildren();
+        if (analysis.mode === "edit") {
+            const label = state.editContext?.label ?? "Edit instruction";
+            const head = element("div", "h3ide-structure-head");
+            head.append(element("strong", "", label));
+            state.structure.append(
+                head,
+                element(
+                    "div", "h3ide-ref-help",
+                    "Write only the requested change. The connected Edit encoder adds its full H3 timing and task wrapper downstream; this IDE leaves your text untouched.",
+                ),
+            );
+            const problems = element("div", "h3ide-problems");
+            if (!analysis.problems.length) {
+                problems.append(element("div", "", "✓ Instruction syntax and connected reference tokens pass."));
+            } else {
+                for (const problem of analysis.problems) {
+                    problems.append(element("div", `h3ide-problem-${problem.severity}`,
+                        `${problem.severity === "error" ? "×" : "!"} ${problem.message}`));
+                }
+            }
+            state.structure.append(problems);
+            return;
+        }
         const head = element("div", "h3ide-structure-head");
         head.append(
             element("strong", "", `${h3ModeLabel(analysis.mode)} strict section order`),
@@ -843,7 +876,8 @@ function mountEditor(node) {
         if (!context) return;
         const text = currentText();
         const mode = state.analysis?.mode ?? effectiveH3Mode(text, state.mode);
-        const health = state.analysis?.valid ? "schema valid"
+        const health = state.analysis?.valid
+            ? mode === "edit" ? "instruction valid" : "schema valid"
             : `${state.analysis?.problems.filter((item) => item.severity === "error").length ?? 0} errors`;
         const references = referencesNode(node)
             ? ["picture", "video", "audio"].map((kind) => {
@@ -851,7 +885,54 @@ function mountEditor(node) {
                 return count ? `${count} ${kind}${count === 1 ? "" : "s"}` : null;
             }).filter(Boolean).join(" · ") || "0 refs"
             : "no refs";
-        context.textContent = `${h3ModeLabel(mode)} · ${health} · ${references} · STRING`;
+        const modeLabel = mode === "edit" && state.editContext
+            ? state.editContext.label : h3ModeLabel(mode);
+        context.textContent = `${modeLabel} · ${health} · ${references} · STRING`;
+    }
+
+    function configureModeSelect() {
+        if (!modeSelect) return;
+        modeSelect.replaceChildren();
+        for (const mode of H3_MODES.filter((item) => !item.contextOnly)) {
+            const option = element("option", "", mode.label);
+            option.value = mode.id;
+            modeSelect.append(option);
+        }
+        if (state.mode === "edit") {
+            const option = element("option", "", `Edit · ${state.editContext?.label ?? "Instruction"}`);
+            option.value = "edit";
+            modeSelect.append(option);
+        }
+        modeSelect.value = state.mode;
+        modeSelect.disabled = state.mode === "edit";
+        modeSelect.title = state.mode === "edit"
+            ? "Selected automatically from the connected TextEncodeH3Edit task"
+            : state.editContext?.verbatim
+                ? "The connected TextEncodeH3Edit is in verbatim mode; choose the complete H3 schema here"
+                : "Choose the strict H3 prompt schema; Auto detects it from the prompt";
+        const placeholder = state.editContext?.placeholder
+            ?? "Write a prompt. Use References to insert <Picture 1>, <Video 1>, or <Audio 1>.";
+        if (state.editor) state.editor.dataset.placeholder = placeholder;
+        if (state.plainEditor) state.plainEditor.placeholder = placeholder;
+    }
+
+    function refreshEditContext(force = false) {
+        const next = downstreamH3EditContext(node);
+        const signature = next?.signature ?? "";
+        if (!force && signature === state.editSignature) return;
+        const previousMode = state.mode;
+        state.editSignature = signature;
+        state.editContext = next;
+        state.mode = next && !next.verbatim ? "edit" : state.manualMode;
+        configureModeSelect();
+        state.completion?.hide();
+        const message = next
+            ? next.verbatim
+                ? "Connected Edit encoder uses the prompt verbatim"
+                : `${next.label} detected from connected Edit encoder`
+            : previousMode === "edit" ? "Edit encoder disconnected" : "Prompt context refreshed";
+        updateFooter(message);
+        dirty();
     }
 
     const head = element("div", "h3ide-head");
@@ -859,17 +940,12 @@ function mountEditor(node) {
     head.append(element("span", "h3ide-title", "H3 Prompt IDE"), context);
 
     const toolbar = element("div", "h3ide-toolbar");
-    const modeSelect = element("select");
-    modeSelect.title = "Choose the strict H3 prompt schema; Auto detects it from the prompt";
-    for (const mode of H3_MODES) {
-        const option = element("option", "", mode.label);
-        option.value = mode.id;
-        modeSelect.append(option);
-    }
-    modeSelect.value = state.mode;
+    modeSelect = element("select");
+    configureModeSelect();
     modeSelect.addEventListener("change", () => {
-        state.mode = modeSelect.value;
-        node.properties[MODE_PROPERTY] = state.mode;
+        state.manualMode = modeSelect.value;
+        state.mode = state.manualMode;
+        node.properties[MODE_PROPERTY] = state.manualMode;
         updateFooter("Schema mode changed");
         state.completion?.hide();
         dirty();
@@ -1016,7 +1092,10 @@ function mountEditor(node) {
     const connectionsChanged = node.onConnectionsChange;
     node.onConnectionsChange = function () {
         const result = connectionsChanged?.apply(this, arguments);
-        setTimeout(() => refreshReferences(true), 0);
+        setTimeout(() => {
+            refreshReferences(true);
+            refreshEditContext(true);
+        }, 0);
         return result;
     };
     const removed = node.onRemoved;
@@ -1031,15 +1110,18 @@ function mountEditor(node) {
         hidePromptWidget(promptWidget);
         synchronizeWidget();
         refreshReferences(true);
+        refreshEditContext(true);
     };
     state.pollTimer = window.setInterval(() => {
         repairLegacyWidgetWidth(domWidget);
         synchronizeWidget();
         refreshReferences(false);
+        refreshEditContext(false);
     }, 500);
 
     renderText(state.lastWidgetValue);
     refreshReferences(true);
+    refreshEditContext(true);
     refreshHistoryButtons();
     updateHeader();
 }

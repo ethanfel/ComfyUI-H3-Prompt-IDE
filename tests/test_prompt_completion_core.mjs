@@ -67,5 +67,11 @@ assert.ok(manual.some((item) => item.label === "(S1)"));
 for (const token of H3_MINIMAX_SPECIAL_TOKENS) {
     assert.ok(manual.some((item) => item.insertText.includes(token)), `Missing ${token}`);
 }
+const editManual = promptCompletionItems(
+    promptCompletionQuery("", 0, {manual:true}), records,
+    {text:"", mode:"edit", limit:200},
+);
+assert.equal(editManual.some((item) => item.kind === "section"), false);
+assert.ok(editManual.some((item) => item.label === "<Picture 1>"));
 
 console.log("H3 standalone completion tests passed");

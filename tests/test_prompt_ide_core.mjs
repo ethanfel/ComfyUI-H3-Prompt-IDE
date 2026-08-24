@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import {
     audioToken,
+    downstreamH3EditContext,
     pictureOrdinalFromInputName,
     pictureToken,
     PromptUndoHistory,
@@ -30,6 +31,53 @@ assert.deepEqual(referenceFromInputName("videos.<Video 2>"), {
 assert.deepEqual(referenceFromInputName("audios.<Audio 4>"), {
     kind:"audio", ordinal:4, token:"<Audio 4>",
 });
+
+function editGraph({
+    promptMode="edit instruction",
+    qualityProfile="recommended | 9-frame settle -> 1 image",
+    primaryImageRole="edit | strong scene anchor (FL2VA)",
+    inputName="prompt",
+    targetType="TextEncodeH3Edit",
+} = {}) {
+    const target = {
+        id:22,
+        type:targetType,
+        inputs:[{name:inputName}],
+        widgets:[
+            {name:"prompt_mode", value:promptMode},
+            {name:"quality_profile", value:qualityProfile},
+            {name:"primary_image_role", value:primaryImageRole},
+        ],
+    };
+    const graph = {
+        links:{7:{id:7, origin_id:11, origin_slot:0, target_id:22, target_slot:0}},
+        getNodeById:(id) => id === 22 ? target : null,
+    };
+    return {id:11, graph, outputs:[{name:"text", links:[7]}]};
+}
+
+assert.deepEqual(downstreamH3EditContext(editGraph({
+    promptMode:"directed | re-pose character",
+})), {
+    mode:"edit",
+    verbatim:false,
+    task:"repose",
+    label:"Re-pose instruction",
+    placeholder:"Describe only the pose transfer. Name the guide picture and what must stay unchanged.",
+    promptMode:"directed | re-pose character",
+    qualityProfile:"recommended | 9-frame settle -> 1 image",
+    primaryImageRole:"edit | strong scene anchor (FL2VA)",
+    targetId:22,
+    signature:"22\u001fdirected | re-pose character\u001frecommended | 9-frame settle -> 1 image\u001fedit | strong scene anchor (FL2VA)",
+});
+assert.equal(downstreamH3EditContext(editGraph({inputName:"clip"})), null);
+assert.equal(downstreamH3EditContext(editGraph({targetType:"CLIPTextEncode"})), null);
+assert.equal(downstreamH3EditContext(editGraph({
+    qualityProfile:"character sheet | 6 panels / 124-frame orbit",
+}))?.label, "Character-sheet assignment");
+assert.deepEqual(downstreamH3EditContext(editGraph({
+    promptMode:"use prompt verbatim",
+}))?.mode, "auto");
 
 const parts = tokenizePrompt(
     "Use <Picture 1>, <Picture 2>, <Video 1>, <Audio 1>, and <Audio 2>. <d>Hello</d>",
@@ -87,6 +135,8 @@ assert.match(source, /createPromptCompletionController/);
 assert.match(source, /repairLegacyWidgetWidth\(domWidget\)/);
 assert.match(source, /analyzeH3Prompt/);
 assert.match(source, /ensureH3Structure/);
+assert.match(source, /downstreamH3EditContext/);
+assert.match(source, /Edit encoder adds its full H3 timing and task wrapper downstream/);
 assert.match(source, /"Sections"/);
 assert.match(source, /element\("textarea", "h3ide-plain-editor"\)/);
 assert.match(source, /state\.richText \? "Rich text" : "Plain text"/);

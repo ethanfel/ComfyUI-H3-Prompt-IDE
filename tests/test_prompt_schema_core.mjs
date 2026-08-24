@@ -5,6 +5,7 @@ import {
     ensureH3Structure,
     H3_BASE_SECTIONS,
     H3_MINIMAX_SPECIAL_TOKENS,
+    H3_MODES,
     H3_REFERENCE_SECTIONS,
     h3AlignmentInstruction,
     insertH3Section,
@@ -17,6 +18,20 @@ assert.equal(detectH3Mode("subject_definitions:\n"), "ref2va");
 assert.equal(detectH3Mode(h3AlignmentInstruction("i2va")), "i2va");
 assert.equal(detectH3Mode(h3AlignmentInstruction("fl2va", {duration:8, finalShot:2})), "fl2va");
 assert.equal(detectH3Mode(h3AlignmentInstruction("l2va", {duration:6, finalShot:1})), "l2va");
+assert.deepEqual(H3_MODES.find((item) => item.id === "edit"), {
+    id:"edit", label:"Edit instruction", contextOnly:true,
+});
+
+const editInstruction = "Use <Picture 2> only for the target pose. Keep everything else unchanged.";
+const editAnalysis = analyzeH3Prompt(editInstruction, "edit", {
+    connectedReferences:[{token:"<Picture 2>"}],
+});
+assert.equal(editAnalysis.valid, true);
+assert.deepEqual(editAnalysis.required, []);
+assert.deepEqual(editAnalysis.missing, []);
+assert.deepEqual(ensureH3Structure(editInstruction, "edit"), {
+    text:editInstruction, mode:"edit", added:[], caret:editInstruction.length,
+});
 
 assert.equal(h3AlignmentInstruction("i2va"),
     "For the target video, at 0.00 seconds into the target video, <Picture 1> (from [Shot 1]) is fully referenced.");

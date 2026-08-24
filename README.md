@@ -24,9 +24,23 @@ Restart ComfyUI, then find the nodes under **text → H3 Prompt IDE**.
 
 `H3 Reference Inputs` handles labels and previews only. For Ref2VA generation, connect the same media loaders to the matching inputs on the native H3 conditioner. Video sockets use ComfyUI `IMAGE` frame batches, matching the native H3 `ref_videos` inputs.
 
+### MiniMax H3 Edit integration
+
+Connect the IDE's `text` output directly to the `prompt` input on
+[`TextEncodeH3Edit`](https://github.com/ethanfel/ComfyUI-MiniMax-H3-Edit).
+The schema selector automatically shows an **Edit** category and follows the
+encoder's current task: edit instruction, re-pose, character swap, new camera
+angle, or character-sheet assignment. Changing the task/profile on the Edit
+encoder updates the IDE context live.
+
+The integration changes only authoring context and validation. It never edits
+the prompt text. Write the short requested change in the IDE; the downstream
+Edit encoder adds its full H3 task/timing wrapper. When the encoder uses
+`use prompt verbatim`, the IDE returns to the manually selected full H3 schema.
+
 ## Nodes
 
-- **H3 Prompt IDE** — rich editor with a Plain/Rich source toggle, T2VA, I2VA, FL2VA, L2VA, and Ref2VA validation; H3-aware completion; section insertion; diagnostics; and plain-text output.
+- **H3 Prompt IDE** — rich editor with a Plain/Rich source toggle, T2VA, I2VA, FL2VA, L2VA, Ref2VA, and downstream Edit-instruction validation; H3-aware completion; section insertion; diagnostics; and plain-text output.
 - **H3 Reference Inputs** — independently autogrows `<Picture 1>`–`<Picture 9>`, `<Video 1>`–`<Video 3>`, and `<Audio 1>`–`<Audio 6>` while keeping media sockets off the editor node.
 
 Reference associations use H3's native `<Picture 1>`, `<Video 1>`, and `<Audio 1>` naming. Audio labels must follow native presentation order: connected video soundtracks first, then standalone audio. This standalone editor intentionally does not include Motion Context `@tag` or `@@@@tag` compilation.

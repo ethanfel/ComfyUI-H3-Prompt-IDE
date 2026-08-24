@@ -36,6 +36,9 @@ export const H3_MODES = Object.freeze([
     {id:"fl2va", label:"FL2VA"},
     {id:"l2va", label:"L2VA"},
     {id:"ref2va", label:"Ref2VA"},
+    // This mode is selected from graph context rather than from the manual
+    // schema menu. TextEncodeH3Edit wraps this short instruction downstream.
+    {id:"edit", label:"Edit instruction", contextOnly:true},
 ]);
 
 // Common valid summary prefixes from the H3 full-reference format. The
@@ -118,8 +121,9 @@ export function effectiveH3Mode(value, selectedMode = "auto") {
 }
 
 export function h3SectionsForMode(mode) {
-    return normalizeH3Mode(mode) === "ref2va"
-        ? H3_REFERENCE_SECTIONS : H3_BASE_SECTIONS;
+    const selected = normalizeH3Mode(mode);
+    if (selected === "edit") return [];
+    return selected === "ref2va" ? H3_REFERENCE_SECTIONS : H3_BASE_SECTIONS;
 }
 
 function normalizedDuration(value) {
@@ -492,6 +496,9 @@ export function ensureH3Structure(value, mode, options = {}) {
     const original = String(value ?? "");
     const selected = normalizeH3Mode(mode) === "auto"
         ? detectH3Mode(original) : normalizeH3Mode(mode);
+    if (selected === "edit") {
+        return {text:original, mode:selected, added:[], caret:original.length};
+    }
     let text = removeKnownAlignment(original);
     const alignment = h3AlignmentInstruction(selected, options);
     if (alignment) text = text ? `${alignment}\n\n${text}` : alignment;

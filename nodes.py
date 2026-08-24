@@ -160,9 +160,9 @@ class H3PromptIDE(io.ComfyNode):
             ],
             description=(
                 "Standalone rich prompt editor with strict H3 mode schemas, "
-                "contextual completion, reference tokens, and an ordinary "
-                "STRING output. Reference media stays on the separate H3 "
-                "Reference Inputs node."
+                "contextual completion, reference tokens, automatic MiniMax "
+                "H3 Edit instruction context, and an ordinary STRING output. "
+                "Reference media stays on the separate H3 Reference Inputs node."
             ),
             inputs=[
                 io.String.Input(
@@ -186,7 +186,11 @@ class H3PromptIDE(io.ComfyNode):
             outputs=[
                 io.String.Output(
                     display_name="text",
-                    tooltip="The prompt as an ordinary ComfyUI STRING.",
+                    tooltip=(
+                        "The prompt as an ordinary ComfyUI STRING. Connecting "
+                        "this directly to TextEncodeH3Edit.prompt activates "
+                        "the IDE's task-aware Edit instruction category."
+                    ),
                 ),
             ],
         )
