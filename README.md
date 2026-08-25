@@ -37,6 +37,7 @@ With MiniMax H3 Edit 0.10.0 or later, connect **H3 Edit Options** to the encoder
 and choose one canonical `mode`. Prompt IDE reads that Options node directly,
 so changing only its mode updates the visible instruction; the encoder's hidden
 legacy task/profile values cannot leave the IDE in the wrong category.
+The **Room + object study** preset requires MiniMax H3 Edit 0.11.0 or later.
 
 For frozen-scene coverage, use the IDE instruction to identify the room or
 scene, declare the orbit center, and assign each optional `<Picture N>` as an
@@ -49,6 +50,12 @@ For cinematic cuts, name one exact visible person, object, architectural
 feature, or fixed point as the coverage target. The Edit encoder turns that
 short instruction into eight timed static shots with true hard cuts and no
 intermediate camera travel.
+
+For **Room + object study**, treat the connected pictures as complementary
+survey views of one physical room and name one exact target object. The Edit
+encoder selects the 362-frame semantic reconstruction preset automatically and
+compiles four room-establishing shots plus 12 close object-study shots with
+hard cuts and no camera travel.
 
 When a directed task or character-sheet profile is selected, the IDE loads a
 short task-specific starting instruction. Empty text and the previous generated

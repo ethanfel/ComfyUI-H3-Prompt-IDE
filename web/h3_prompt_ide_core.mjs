@@ -1,7 +1,7 @@
 import {
     H3_ALL_SECTIONS,
     H3_MINIMAX_SPECIAL_TOKENS,
-} from "./h3_prompt_schema_core.mjs?v=0.8.4";
+} from "./h3_prompt_schema_core.mjs?v=0.8.5";
 
 export const H3_EDIT_ENCODER_NODE = "TextEncodeH3Edit";
 export const H3_EDIT_OPTIONS_NODE = "H3EditOptions";
@@ -35,6 +35,11 @@ const EDIT_OPTION_PRESETS = Object.freeze({
         promptMode:"directed | frozen cinematic cuts",
         qualityProfile:"scene coverage | 124-frame camera path",
     }),
+    "scene coverage | room + object study": Object.freeze({
+        promptMode:"directed | room and object study cuts",
+        qualityProfile:"scene coverage | 362-frame camera path",
+        primaryImageRole:"generate | semantic Picture 1 (FL2VA)",
+    }),
     "advanced | prompt verbatim": Object.freeze({
         promptMode:"use prompt verbatim",
         qualityProfile:"recommended | 5-frame context -> 1 image",
@@ -66,6 +71,11 @@ const EDIT_TASKS = Object.freeze({
         id:"scene_cuts",
         label:"Cinematic scene cuts",
         placeholder:"Name one exact person, object, or fixed point as the coverage target for every camera cut.",
+    }),
+    "directed | room and object study cuts": Object.freeze({
+        id:"room_object_study",
+        label:"Room + object study",
+        placeholder:"Describe the one room shown by the survey pictures and name one exact target object for close coverage.",
     }),
 });
 
@@ -99,7 +109,13 @@ function editOptionPreset(target) {
         && profileOverride
         && profileOverride !== "canonical for selected mode"
         ? profileOverride : preset.qualityProfile;
-    return {source, mode, promptMode:preset.promptMode, qualityProfile};
+    return {
+        source,
+        mode,
+        promptMode:preset.promptMode,
+        qualityProfile,
+        primaryImageRole:preset.primaryImageRole,
+    };
 }
 
 function editTask(promptMode, qualityProfile) {
@@ -142,7 +158,9 @@ export function downstreamH3EditContext(editorNode) {
             ?? String(widgetValue(target, "prompt_mode") ?? "edit instruction");
         const qualityProfile = optionPreset?.qualityProfile
             ?? String(widgetValue(target, "quality_profile") ?? "");
-        const primaryImageRole = String(widgetValue(target, "primary_image_role") ?? "");
+        const primaryImageRole = String(
+            optionPreset?.primaryImageRole ?? widgetValue(target, "primary_image_role") ?? "",
+        );
         const verbatim = promptMode === "use prompt verbatim";
         const task = editTask(promptMode, qualityProfile);
         return {
@@ -196,6 +214,11 @@ export function editInstructionTemplate(context) {
             return "Create one completely new coherent scene using <Picture 1> and any additional connected pictures as design references only. Coverage target: the primary person or object in the generated scene. Establish the complete scene first, freeze every subject and object, then use instantaneous hard cuts to capture distinct cinematic viewpoints around that exact target.";
         }
         return "Coverage target: the primary person or object in <Picture 1>. Freeze the complete physical scene, including the target's exact pose, expression, wardrobe, surrounding objects, geometry, materials, lighting, and shadows. Use instantaneous hard cuts to capture distinct cinematic viewpoints around that exact target; never animate the scene or show camera travel between views.";
+    case "room_object_study":
+        if (String(context.primaryImageRole ?? "").startsWith("generate |")) {
+            return "Treat <Picture 1> and every additional connected picture as complementary survey views of the same physical room, not separate designs or source frames. Regenerate that recognizable room as a clean high-fidelity photorealistic reconstruction while preserving its architecture, dimensions, openings, fixtures, furniture, materials, lighting, and ordinary physical character. Target object: the primary freestanding object near the center of the room. Preserve its exact dimensions, silhouette, construction, material, seams or joinery, orientation, and fixed floor position. Freeze the reconstructed world, then create room-establishing views followed by dense close object views using instantaneous hard cuts with no camera travel.";
+        }
+        return "Treat <Picture 1> and every additional connected picture as complementary views of the same physical room. Target object: the primary freestanding object near the center of the room. Freeze its exact dimensions, silhouette, construction, material, seams or joinery, orientation, floor position, and complete surrounding room. Create room-establishing views followed by dense close object views using instantaneous hard cuts with no camera travel.";
     default:
         return "";
     }

@@ -156,6 +156,21 @@ assert.match(editInstructionTemplate(optionCinematicCuts), /Coverage target:/);
 assert.match(editInstructionTemplate(optionCinematicCuts), /instantaneous hard cuts/);
 assert.match(editInstructionTemplate(optionCinematicCuts), /never animate the scene/);
 
+const optionRoomObjectStudy = downstreamH3EditContext(editGraph({
+    promptMode:"edit instruction",
+    qualityProfile:"experimental | true 1 frame (low quality)",
+    primaryImageRole:"edit | strong scene anchor (FL2VA)",
+    optionsMode:"scene coverage | room + object study",
+}));
+assert.equal(optionRoomObjectStudy.task, "room_object_study");
+assert.equal(optionRoomObjectStudy.label, "Room + object study");
+assert.equal(optionRoomObjectStudy.promptMode, "directed | room and object study cuts");
+assert.equal(optionRoomObjectStudy.qualityProfile, "scene coverage | 362-frame camera path");
+assert.equal(optionRoomObjectStudy.primaryImageRole, "generate | semantic Picture 1 (FL2VA)");
+assert.match(editInstructionTemplate(optionRoomObjectStudy), /complementary survey views/);
+assert.match(editInstructionTemplate(optionRoomObjectStudy), /high-fidelity photorealistic reconstruction/);
+assert.match(editInstructionTemplate(optionRoomObjectStudy), /dense close object views/);
+
 const parts = tokenizePrompt(
     "Use <Picture 1>, <Picture 2>, <Video 1>, <Audio 1>, and <Audio 2>. <d>Hello</d>",
     [
