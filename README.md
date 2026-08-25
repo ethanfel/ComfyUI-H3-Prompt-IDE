@@ -54,8 +54,10 @@ intermediate camera travel.
 For **Room + object study**, treat the connected pictures as complementary
 survey views of one physical room and name one exact target object. The Edit
 encoder selects the 362-frame semantic reconstruction preset automatically and
-compiles four room-establishing shots plus 12 close object-study shots with
-hard cuts and no camera travel.
+compiles six room-establishing shots plus 10 contextual object-study shots.
+Each object view retains the complete object, its floor/rug contact, and room
+anchors while locking its orientation; background parallax shows that only the
+camera changed position.
 
 When a directed task or character-sheet profile is selected, the IDE loads a
 short task-specific starting instruction. Empty text and the previous generated

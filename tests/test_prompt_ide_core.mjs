@@ -169,7 +169,11 @@ assert.equal(optionRoomObjectStudy.qualityProfile, "scene coverage | 362-frame c
 assert.equal(optionRoomObjectStudy.primaryImageRole, "generate | semantic Picture 1 (FL2VA)");
 assert.match(editInstructionTemplate(optionRoomObjectStudy), /complementary survey views/);
 assert.match(editInstructionTemplate(optionRoomObjectStudy), /high-fidelity photorealistic reconstruction/);
-assert.match(editInstructionTemplate(optionRoomObjectStudy), /dense close object views/);
+assert.match(editInstructionTemplate(optionRoomObjectStudy), /six room-establishing views/);
+assert.match(editInstructionTemplate(optionRoomObjectStudy), /ten contextual object views/);
+assert.match(editInstructionTemplate(optionRoomObjectStudy), /25 to 45 percent of the frame/);
+assert.match(editInstructionTemplate(optionRoomObjectStudy), /never spins, turns, yaws, or pivots/);
+assert.match(editInstructionTemplate(optionRoomObjectStudy), /Background parallax must prove/);
 
 const parts = tokenizePrompt(
     "Use <Picture 1>, <Picture 2>, <Video 1>, <Audio 1>, and <Audio 2>. <d>Hello</d>",
