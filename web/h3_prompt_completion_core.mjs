@@ -4,7 +4,7 @@ import {
     H3_TASK_DIRECTIVES,
     effectiveH3Mode,
     h3SectionsForMode,
-} from "./h3_prompt_schema_core.mjs?v=0.8.6";
+} from "./h3_prompt_schema_core.mjs?v=0.8.7";
 
 export const H3_LANGUAGE_MARKERS = Object.freeze([
     "[English]", "[French]", "[Spanish]", "[German]", "[Italian]",

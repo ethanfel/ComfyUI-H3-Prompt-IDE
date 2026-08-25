@@ -51,8 +51,11 @@ feature, or fixed point as the coverage target. The Edit encoder turns that
 short instruction into eight timed static shots with true hard cuts and no
 intermediate camera travel.
 
-For **Room + object study**, treat the connected pictures as complementary
-survey views of one physical room and name one exact target object. The Edit
+For **Room + object study**, treat the connected pictures as equal,
+complementary Qwen-only survey views of one physical room and name one exact
+target object. The legacy `source_image` socket only assigns the `<Picture 1>`
+ordinal in this preset; it does not make that picture a master, source frame,
+pixel/composition anchor, or VAE keyframe. The Edit
 encoder selects the 362-frame semantic reconstruction preset automatically and
 compiles six room-establishing shots plus 10 contextual object-study shots.
 Each object view retains the complete object, its floor/rug contact, and room
