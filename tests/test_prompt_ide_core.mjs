@@ -248,6 +248,7 @@ assert.match(source, /state\.richText \? "Rich text" : "Plain text"/);
 assert.match(source, /Disable rich text and show the base prompt/);
 assert.match(source, /h3ide-token-label/);
 assert.match(source, /Type <, \[, \(, or a section name/);
+assert.match(source, /const caret = selectionTextOffset\(state\.editor\);\s+renderText\(editorPlainText\(state\.editor\), caret\);/);
 assert.doesNotMatch(source, /Type @, #/);
 
 console.log("H3 Prompt IDE core tests passed");

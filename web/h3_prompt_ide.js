@@ -8,9 +8,9 @@ import {
     referenceFromInputName,
     tokenizePrompt,
     undoDirection,
-} from "./h3_prompt_ide_core.mjs?v=0.8.7";
-import {createPromptCompletionController} from "./h3_prompt_completion_core.mjs?v=0.8.7";
-import {repairLegacyWidgetWidth} from "./h3_legacy_widget_width.mjs?v=0.8.7";
+} from "./h3_prompt_ide_core.mjs?v=0.8.8";
+import {createPromptCompletionController} from "./h3_prompt_completion_core.mjs?v=0.8.8";
+import {repairLegacyWidgetWidth} from "./h3_legacy_widget_width.mjs?v=0.8.8";
 import {
     analyzeH3Prompt,
     effectiveH3Mode,
@@ -18,7 +18,7 @@ import {
     H3_MODES,
     h3ModeLabel,
     insertH3Section,
-} from "./h3_prompt_schema_core.mjs?v=0.8.7";
+} from "./h3_prompt_schema_core.mjs?v=0.8.8";
 
 // Standalone adaptation of the Rich Scene Prompt Editor originally authored
 // for ethanfel/ComfyUI-MiniMaxH3-Contex-Loop. Its rich reference presentation
@@ -1081,6 +1081,9 @@ function mountEditor(node) {
     state.editor.addEventListener("paste", (event) => {
         event.preventDefault();
         insertPlainText(state.editor, event.clipboardData?.getData("text/plain") ?? "");
+        const caret = selectionTextOffset(state.editor);
+        renderText(editorPlainText(state.editor), caret);
+        state.completion?.refresh();
     });
     state.editor.addEventListener("copy", (event) => copySelection(state.editor, event));
     state.editor.addEventListener("cut", (event) => copySelection(state.editor, event, true));

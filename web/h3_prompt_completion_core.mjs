@@ -4,7 +4,7 @@ import {
     H3_TASK_DIRECTIVES,
     effectiveH3Mode,
     h3SectionsForMode,
-} from "./h3_prompt_schema_core.mjs?v=0.8.7";
+} from "./h3_prompt_schema_core.mjs?v=0.8.8";
 
 export const H3_LANGUAGE_MARKERS = Object.freeze([
     "[English]", "[French]", "[Spanish]", "[German]", "[Italian]",
@@ -35,10 +35,23 @@ function specialQuery(before, trigger, pattern) {
         typed, query:typed.slice(1), manual:false};
 }
 
+function completedAngleQuery(text, position) {
+    const start = text.lastIndexOf("<", Math.max(0, position - 1));
+    if (start < 0 || start >= position) return null;
+    const end = text.indexOf(">", start + 1);
+    if (end < position || end - start > 65) return null;
+    const typed = text.slice(start, end + 1);
+    if (typed.includes("\n") || typed.slice(1).includes("<")) return null;
+    return {trigger:"<", start, end:end + 1, typed,
+        query:typed.slice(1, -1), manual:false};
+}
+
 export function promptCompletionQuery(value, caret, {manual = false} = {}) {
     const text = String(value ?? "");
     const position = clampedCaret(text, caret);
     const before = text.slice(0, position);
+    const completedAngle = completedAngleQuery(text, position);
+    if (completedAngle) return completedAngle;
     for (const [trigger, pattern] of [
         ["<", /(<[^>\n]{0,64})$/],
         ["[", /(\[[^\]\n]{0,96})$/],

@@ -19,6 +19,20 @@ assert.equal(promptCompletionQuery("Use [key", 8).trigger, "[");
 assert.equal(promptCompletionQuery("Speaker (S", 10).trigger, "(");
 assert.equal(promptCompletionQuery("subject_def", 11).trigger, "section");
 
+const pastedReference = "<Audio 1>: reference - its vocal timbre guides <Subject 1>.";
+const pastedAudioQuery = promptCompletionQuery(pastedReference, 6);
+assert.deepEqual(pastedAudioQuery, {
+    trigger:"<", start:0, end:9, typed:"<Audio 1>", query:"Audio 1", manual:false,
+});
+assert.deepEqual(applyPromptCompletion(pastedReference, pastedAudioQuery, {
+    label:"<Audio 2>", insertText:"<Audio 2>",
+}), {
+    text:"<Audio 2>: reference - its vocal timbre guides <Subject 1>.", caret:9,
+});
+const subjectStart = pastedReference.indexOf("<Subject 1>");
+assert.equal(promptCompletionQuery(pastedReference, subjectStart + 5).end,
+    subjectStart + "<Subject 1>".length);
+
 const pictures = promptCompletionItems(promptCompletionQuery("<Pic", 4), records);
 assert.deepEqual(pictures.map((item) => item.label), [
     "<Picture 1>", "<Picture 2>", "<Picture 3>", "<Picture 4>", "<Picture 5>",
