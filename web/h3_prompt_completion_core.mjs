@@ -4,7 +4,7 @@ import {
     H3_TASK_DIRECTIVES,
     effectiveH3Mode,
     h3SectionsForMode,
-} from "./h3_prompt_schema_core.mjs?v=0.8.8";
+} from "./h3_prompt_schema_core.mjs?v=0.8.9";
 
 export const H3_LANGUAGE_MARKERS = Object.freeze([
     "[English]", "[French]", "[Spanish]", "[German]", "[Italian]",
@@ -42,8 +42,24 @@ function completedAngleQuery(text, position) {
     if (end < position || end - start > 65) return null;
     const typed = text.slice(start, end + 1);
     if (typed.includes("\n") || typed.slice(1).includes("<")) return null;
-    return {trigger:"<", start, end:end + 1, typed,
-        query:typed.slice(1, -1), manual:false};
+    return promptTokenReplacementQuery(text, start, end + 1);
+}
+
+export function promptTokenReplacementQuery(value, requestedStart, requestedEnd) {
+    const text = String(value ?? "");
+    const start = clampedCaret(text, requestedStart);
+    const end = Math.max(start, clampedCaret(text, requestedEnd));
+    const typed = text.slice(start, end);
+    const angle = typed.match(/^<([^<>\n]{1,64})>$/);
+    if (angle) {
+        const reference = typed.match(/^<(Picture|Video|Audio|Subject)\s+\d+>$/i);
+        return {trigger:"<", start, end, typed,
+            query:reference?.[1] ?? angle[1], manual:false, replacement:true};
+    }
+    if (/^\(S\d+(?:,S\d+)*\)$/i.test(typed)) {
+        return {trigger:"(", start, end, typed, query:"S", manual:false, replacement:true};
+    }
+    return null;
 }
 
 export function promptCompletionQuery(value, caret, {manual = false} = {}) {
@@ -96,19 +112,24 @@ function referenceItems(records) {
         const match = label.match(/^<(Picture|Video|Audio)\s+\d+>$/i);
         if (!match) continue;
         const kind = match[1].toLowerCase();
-        items.push({kind, label, insertText:label, detail:`Connected H3 ${kind} reference`, priority:record.ordinal ?? 0});
+        items.push({kind, label, insertText:label, appendSpace:true,
+            detail:`Connected H3 ${kind} reference`, priority:record.ordinal ?? 0});
     }
     for (let index = 1; index <= 9; index += 1) {
-        items.push({kind:"picture", label:`<Picture ${index}>`, insertText:`<Picture ${index}>`, detail:"H3 reference picture label", priority:10 + index});
+        items.push({kind:"picture", label:`<Picture ${index}>`, insertText:`<Picture ${index}>`,
+            appendSpace:true, detail:"H3 reference picture label", priority:10 + index});
     }
     for (let index = 1; index <= 8; index += 1) {
-        items.push({kind:"subject", label:`<Subject ${index}>`, insertText:`<Subject ${index}>`, detail:"H3 reusable visible subject", priority:20 + index});
+        items.push({kind:"subject", label:`<Subject ${index}>`, insertText:`<Subject ${index}>`,
+            appendSpace:true, detail:"H3 reusable visible subject", priority:20 + index});
     }
     for (let index = 1; index <= 3; index += 1) {
-        items.push({kind:"video", label:`<Video ${index}>`, insertText:`<Video ${index}>`, detail:"H3 reference video label", priority:40 + index});
+        items.push({kind:"video", label:`<Video ${index}>`, insertText:`<Video ${index}>`,
+            appendSpace:true, detail:"H3 reference video label", priority:40 + index});
     }
     for (let index = 1; index <= 6; index += 1) {
-        items.push({kind:"audio", label:`<Audio ${index}>`, insertText:`<Audio ${index}>`, detail:"H3 reference audio label", priority:50 + index});
+        items.push({kind:"audio", label:`<Audio ${index}>`, insertText:`<Audio ${index}>`,
+            appendSpace:true, detail:"H3 reference audio label", priority:50 + index});
     }
     items.push(
         {kind:"dialogue", label:"<d>…</d>", insertText:`${DIALOGUE_START}${DIALOGUE_END}`, filterText:"d dialogue", detail:"H3 dialogue or lyric span", caretOffset:DIALOGUE_START.length, priority:60},
@@ -201,10 +222,15 @@ export function applyPromptCompletion(value, query, item) {
     const start = Math.max(0, Math.min(text.length, Number(query.start) || 0));
     const end = Math.max(start, Math.min(text.length, Number(query.end) || start));
     const insertText = String(item.insertText ?? item.label ?? "");
-    const result = text.slice(0, start) + insertText + text.slice(end);
+    const after = text.slice(end);
+    const wantsSpace = Boolean(item.appendSpace && !query.replacement);
+    const addedSpace = wantsSpace && !/^\s/.test(after) ? " " : "";
+    const existingSpace = wantsSpace && /^[ \t]/.test(after) ? 1 : 0;
+    const result = text.slice(0, start) + insertText + addedSpace + after;
     const relative = item.caretOffset == null ? insertText.length
         : Math.max(0, Math.min(insertText.length, Number(item.caretOffset) || 0));
-    return {text:result, caret:start + relative};
+    const spacingOffset = relative === insertText.length ? addedSpace.length + existingSpace : 0;
+    return {text:result, caret:start + relative + spacingOffset};
 }
 
 function injectStyles() {
@@ -319,15 +345,25 @@ export function createPromptCompletionController({
         menu.hidden = false; input.setAttribute("aria-expanded", "true"); updateActive(); position();
     }
 
-    function refresh({manual = false} = {}) {
+    function show(query, {resetSelection = false} = {}) {
         const text = String(getText?.() ?? "");
-        currentQuery = promptCompletionQuery(text, getCaret?.(), {manual});
+        currentQuery = query;
         currentItems = promptCompletionItems(currentQuery, getRecords(), {
             text, mode:getMode(), limit:maxItems,
         });
+        if (resetSelection) selected = 0;
         selected = Math.min(selected, Math.max(0, currentItems.length - 1));
         if (!currentQuery || !currentItems.length) hide(); else render();
         return !menu.hidden;
+    }
+
+    function refresh({manual = false} = {}) {
+        const text = String(getText?.() ?? "");
+        return show(promptCompletionQuery(text, getCaret?.(), {manual}));
+    }
+
+    function open(query) {
+        return show(query, {resetSelection:true});
     }
 
     function handleKeydown(event) {
@@ -357,7 +393,7 @@ export function createPromptCompletionController({
     input.addEventListener("keyup", onKeyup);
     globalThis.addEventListener?.("resize", onResize);
     globalThis.addEventListener?.("scroll", onResize, true);
-    return {refresh, hide, accept, handleKeydown, get visible() { return !menu.hidden; }, destroy() {
+    return {refresh, open, hide, accept, handleKeydown, get visible() { return !menu.hidden; }, destroy() {
         input.removeEventListener("blur", onBlur);
         input.removeEventListener("click", onClick);
         input.removeEventListener("keyup", onKeyup);

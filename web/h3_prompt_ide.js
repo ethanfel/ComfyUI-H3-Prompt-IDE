@@ -8,9 +8,12 @@ import {
     referenceFromInputName,
     tokenizePrompt,
     undoDirection,
-} from "./h3_prompt_ide_core.mjs?v=0.8.8";
-import {createPromptCompletionController} from "./h3_prompt_completion_core.mjs?v=0.8.8";
-import {repairLegacyWidgetWidth} from "./h3_legacy_widget_width.mjs?v=0.8.8";
+} from "./h3_prompt_ide_core.mjs?v=0.8.9";
+import {
+    createPromptCompletionController,
+    promptTokenReplacementQuery,
+} from "./h3_prompt_completion_core.mjs?v=0.8.9";
+import {repairLegacyWidgetWidth} from "./h3_legacy_widget_width.mjs?v=0.8.9";
 import {
     analyzeH3Prompt,
     effectiveH3Mode,
@@ -18,7 +21,7 @@ import {
     H3_MODES,
     h3ModeLabel,
     insertH3Section,
-} from "./h3_prompt_schema_core.mjs?v=0.8.8";
+} from "./h3_prompt_schema_core.mjs?v=0.8.9";
 
 // Standalone adaptation of the Rich Scene Prompt Editor originally authored
 // for ethanfel/ComfyUI-MiniMaxH3-Contex-Loop. Its rich reference presentation
@@ -113,7 +116,8 @@ function injectStyles() {
       .h3ide-editor:empty::before { content:attr(data-placeholder); color:var(--h3ide-muted); pointer-events:none; }
       .h3ide-token { display:inline-flex; align-items:center; gap:3px; max-width:320px; margin:0 1px;
         padding:1px 4px 1px 2px; border:1px solid currentColor; border-radius:5px; vertical-align:1px;
-        line-height:1.25; cursor:pointer; user-select:all; background:color-mix(in srgb,currentColor 14%,transparent); }
+        line-height:1.25; cursor:default; user-select:all; background:color-mix(in srgb,currentColor 14%,transparent); }
+      .h3ide-token-replaceable { cursor:pointer; }
       .h3ide-token-picture { color:var(--h3ide-picture); }
       .h3ide-token-video { color:var(--h3ide-video); }
       .h3ide-token-audio { color:var(--h3ide-audio); }
@@ -321,7 +325,7 @@ function labelReferenceSockets(node) {
     node.graph?.setDirtyCanvas?.(true, false);
 }
 
-function editorPlainText(editor) {
+function editorPlainText(editor, {trimFinalNewline = true} = {}) {
     function read(node, root) {
         if (node.nodeType === Node.TEXT_NODE) return node.textContent ?? "";
         if (node.nodeType === Node.DOCUMENT_FRAGMENT_NODE) {
@@ -339,7 +343,8 @@ function editorPlainText(editor) {
         if (["DIV", "P"].includes(node.tagName) && node !== root && !text.endsWith("\n")) text += "\n";
         return text;
     }
-    return read(editor, editor).replace(/\n$/, "");
+    const text = read(editor, editor);
+    return trimFinalNewline ? text.replace(/\n$/, "") : text;
 }
 
 function selectedPlainText(editor) {
@@ -375,6 +380,13 @@ function selectionTextOffset(editor) {
     range.selectNodeContents(editor);
     range.setEnd(selection.anchorNode, selection.anchorOffset);
     return editorPlainText(range.cloneContents()).length;
+}
+
+function nodeTextOffset(editor, node) {
+    const range = document.createRange();
+    range.selectNodeContents(editor);
+    range.setEndBefore(node);
+    return editorPlainText(range.cloneContents(), {trimFinalNewline:false}).length;
 }
 
 function restoreCaret(editor, requested) {
@@ -578,6 +590,8 @@ function mountEditor(node) {
         const token = element("span", `h3ide-token h3ide-token-${part.kind}`);
         token.contentEditable = "false";
         token.dataset.token = part.text;
+        const replaceable = Boolean(promptTokenReplacementQuery(part.text, 0, part.text.length));
+        if (replaceable) token.classList.add("h3ide-token-replaceable");
         const record = part.type === "reference"
             ? state.records.find((item) => item.kind === part.kind && item.ordinal === part.ordinal)
             : null;
@@ -593,11 +607,12 @@ function mountEditor(node) {
             } else token.append(icon(part.kind));
             token.append(element("span", "h3ide-token-label", part.text));
         }
-        token.title = part.unresolved
+        const title = part.unresolved
             ? part.type === "reference"
                 ? `${part.text} is not connected on H3 Reference Inputs`
                 : `Use the exact H3 spelling and capitalization for ${part.text}`
             : part.kind === "section" ? `H3 section · ${part.section}` : part.text;
+        token.title = replaceable ? `${title} · Click to replace` : title;
         return token;
     }
 
@@ -1120,6 +1135,19 @@ function mountEditor(node) {
         getRecords:() => state.records,
         getMode:() => state.mode,
         replaceText:(result) => replaceEditorText(result.text, result.caret, "H3 completion inserted"),
+    });
+    state.editor.addEventListener("click", (event) => {
+        const token = event.target?.closest?.(".h3ide-token-replaceable");
+        if (!token || !state.editor.contains(token)) return;
+        const text = editorPlainText(state.editor);
+        const start = nodeTextOffset(state.editor, token);
+        const query = promptTokenReplacementQuery(
+            text, start, start + String(token.dataset.token ?? "").length,
+        );
+        if (!query) return;
+        event.preventDefault();
+        restoreCaret(state.editor, query.end);
+        state.completion?.open(query);
     });
 
     const footer = element("div", "h3ide-footer");

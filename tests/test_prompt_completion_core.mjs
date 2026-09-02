@@ -3,6 +3,7 @@ import {
     applyPromptCompletion,
     promptCompletionItems,
     promptCompletionQuery,
+    promptTokenReplacementQuery,
 } from "../web/h3_prompt_completion_core.mjs";
 import {H3_MINIMAX_SPECIAL_TOKENS} from "../web/h3_prompt_schema_core.mjs";
 
@@ -22,16 +23,29 @@ assert.equal(promptCompletionQuery("subject_def", 11).trigger, "section");
 const pastedReference = "<Audio 1>: reference - its vocal timbre guides <Subject 1>.";
 const pastedAudioQuery = promptCompletionQuery(pastedReference, 6);
 assert.deepEqual(pastedAudioQuery, {
-    trigger:"<", start:0, end:9, typed:"<Audio 1>", query:"Audio 1", manual:false,
+    trigger:"<", start:0, end:9, typed:"<Audio 1>", query:"Audio",
+    manual:false, replacement:true,
 });
-assert.deepEqual(applyPromptCompletion(pastedReference, pastedAudioQuery, {
-    label:"<Audio 2>", insertText:"<Audio 2>",
-}), {
+const audioReplacement = promptCompletionItems(pastedAudioQuery, records)
+    .find((item) => item.label === "<Audio 2>");
+assert.deepEqual(applyPromptCompletion(pastedReference, pastedAudioQuery, audioReplacement), {
     text:"<Audio 2>: reference - its vocal timbre guides <Subject 1>.", caret:9,
 });
 const subjectStart = pastedReference.indexOf("<Subject 1>");
 assert.equal(promptCompletionQuery(pastedReference, subjectStart + 5).end,
     subjectStart + "<Subject 1>".length);
+
+const richTokenQuery = promptTokenReplacementQuery("Use <Picture 1> here", 4, 15);
+assert.deepEqual(richTokenQuery, {
+    trigger:"<", start:4, end:15, typed:"<Picture 1>", query:"Picture",
+    manual:false, replacement:true,
+});
+assert.deepEqual(promptCompletionItems(richTokenQuery, records).map((item) => item.label), [
+    "<Picture 1>", "<Picture 2>", "<Picture 3>", "<Picture 4>", "<Picture 5>",
+    "<Picture 6>", "<Picture 7>", "<Picture 8>", "<Picture 9>",
+]);
+assert.equal(promptTokenReplacementQuery("(S2)", 0, 4).query, "S");
+assert.equal(promptTokenReplacementQuery("subject_definitions:", 0, 20), null);
 
 const pictures = promptCompletionItems(promptCompletionQuery("<Pic", 4), records);
 assert.deepEqual(pictures.map((item) => item.label), [
@@ -41,6 +55,12 @@ assert.deepEqual(pictures.map((item) => item.label), [
 assert.match(pictures[0].detail, /Connected/);
 assert.match(promptCompletionItems(promptCompletionQuery("<Vid", 4), records)[0].detail, /Connected/);
 assert.match(promptCompletionItems(promptCompletionQuery("<Aud", 4), records)[0].detail, /Connected/);
+assert.deepEqual(applyPromptCompletion("Use <Pic", promptCompletionQuery("Use <Pic", 8), pictures[0]), {
+    text:"Use <Picture 1> ", caret:16,
+});
+assert.deepEqual(applyPromptCompletion("<Pic next", promptCompletionQuery("<Pic next", 4), pictures[0]), {
+    text:"<Picture 1> next", caret:12,
+});
 assert.ok(promptCompletionItems(promptCompletionQuery("<sce", 4), records)
     .some((item) => item.label === "<scenetrans>"));
 assert.ok(promptCompletionItems(promptCompletionQuery("<cut", 4), records)
