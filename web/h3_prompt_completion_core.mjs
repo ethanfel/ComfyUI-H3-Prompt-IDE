@@ -6,7 +6,7 @@ import {
     H3_VISUAL_RETENTION_MARKERS,
     effectiveH3Mode,
     h3SectionsForMode,
-} from "./h3_prompt_schema_core.mjs?v=0.8.14";
+} from "./h3_prompt_schema_core.mjs?v=0.8.15";
 
 export const H3_LANGUAGE_MARKERS = Object.freeze([
     "[English]", "[French]", "[Spanish]", "[German]", "[Italian]",
@@ -136,6 +136,25 @@ export function promptRetentionReplacementQuery(value, caret) {
             manual:false, replacement:true};
     }
     return null;
+}
+
+export function promptRetentionMarkerRanges(value) {
+    const text = String(value ?? "");
+    const markers = [...new Set([
+        ...H3_VISUAL_RETENTION_MARKERS,
+        ...H3_AUDIO_RETENTION_MARKERS,
+    ])];
+    const pattern = new RegExp(`\\b(?:${markers.join("|")})\\b`, "gi");
+    const ranges = [];
+    for (const match of text.matchAll(pattern)) {
+        const start = match.index ?? 0;
+        const end = start + match[0].length;
+        const query = promptRetentionReplacementQuery(text, start + 1);
+        if (query?.start === start && query.end === end) {
+            ranges.push({start, end, marker:match[0]});
+        }
+    }
+    return ranges;
 }
 
 export function promptCompletionQuery(value, caret, {manual = false} = {}) {
