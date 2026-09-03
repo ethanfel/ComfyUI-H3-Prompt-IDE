@@ -258,6 +258,8 @@ assert.match(source, /h3ide-token-replaceable/);
 assert.match(source, /state\.completion\?\.open\(query\)/);
 assert.match(source, /event\.ctrlKey \|\| event\.metaKey/);
 assert.match(source, /promptRetentionReplacementQuery/);
+assert.match(source, /Ctrl\/Cmd-click a retention value such as weak_reference to replace it/);
+assert.match(source, /Start typing or press Ctrl\/Cmd\+Space after a retention-analysis colon/);
 assert.match(source, /caretPositionFromPoint/);
 assert.match(source, /caretRangeFromPoint/);
 assert.doesNotMatch(source, /h3ide-token-retention/);
@@ -266,7 +268,7 @@ const focusEditorBody = source.match(/function focusCurrentEditor\(caret = null\
 assert.ok(focusEditorBody.indexOf("state.editor?.focus()")
     < focusEditorBody.indexOf("restoreCaret(state.editor, caret)"));
 assert.doesNotMatch(focusEditorBody, /renderText/);
-assert.match(source, /Type <, \[, \(, or section/);
+assert.match(source, /Type <, \[, \(, a section, or a retention marker/);
 assert.match(source, /const caret = selectionTextOffset\(state\.editor\);\s+renderText\(editorPlainText\(state\.editor\), caret\);/);
 assert.doesNotMatch(source, /Type @, #/);
 

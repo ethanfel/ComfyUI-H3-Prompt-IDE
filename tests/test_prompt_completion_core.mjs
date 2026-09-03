@@ -93,6 +93,62 @@ assert.deepEqual(
 const proseMarker = retentionPrompt.lastIndexOf("weak_reference");
 assert.equal(promptRetentionReplacementQuery(retentionPrompt, proseMarker + 4), null);
 
+const visualInsertionPrompt = "retention_analysis:\n<Subject 1>: ";
+const visualInsertionQuery = promptCompletionQuery(
+    visualInsertionPrompt, visualInsertionPrompt.length, {manual:true},
+);
+assert.equal(visualInsertionQuery.trigger, "retention_visual");
+assert.deepEqual(
+    promptCompletionItems(visualInsertionQuery).map((item) => item.label),
+    [...H3_VISUAL_RETENTION_MARKERS],
+);
+const fullyPreserved = promptCompletionItems(visualInsertionQuery)[0];
+assert.deepEqual(
+    applyPromptCompletion(visualInsertionPrompt, visualInsertionQuery, fullyPreserved),
+    {
+        text:`${visualInsertionPrompt}fully_preserved - `,
+        caret:`${visualInsertionPrompt}fully_preserved - `.length,
+    },
+);
+const partialInsertionPrompt = `${visualInsertionPrompt}wea`;
+const partialInsertionQuery = promptCompletionQuery(
+    partialInsertionPrompt, partialInsertionPrompt.length,
+);
+assert.deepEqual(promptCompletionItems(partialInsertionQuery).map((item) => item.label), [
+    "weak_reference",
+]);
+assert.deepEqual(applyPromptCompletion(
+    partialInsertionPrompt,
+    partialInsertionQuery,
+    promptCompletionItems(partialInsertionQuery)[0],
+), {
+    text:`${visualInsertionPrompt}weak_reference - `,
+    caret:`${visualInsertionPrompt}weak_reference - `.length,
+});
+const insertionBeforeProse = `${visualInsertionPrompt}wea existing explanation`;
+const insertionBeforeProseQuery = promptCompletionQuery(
+    insertionBeforeProse, visualInsertionPrompt.length + 3,
+);
+assert.equal(applyPromptCompletion(
+    insertionBeforeProse,
+    insertionBeforeProseQuery,
+    promptCompletionItems(insertionBeforeProseQuery)[0],
+).text, `${visualInsertionPrompt}weak_reference - existing explanation`);
+const audioInsertionPrompt = "retention_analysis:\n<Audio 1>: ful";
+const audioInsertionQuery = promptCompletionQuery(
+    audioInsertionPrompt, audioInsertionPrompt.length,
+);
+assert.equal(audioInsertionQuery.trigger, "retention_audio");
+assert.deepEqual(promptCompletionItems(audioInsertionQuery).map((item) => item.label), [
+    "fully_copy",
+]);
+const visualReplacement = promptCompletionItems(visualRetentionQuery)
+    .find((item) => item.label === "fully_preserved");
+assert.equal(
+    applyPromptCompletion(retentionPrompt, visualRetentionQuery, visualReplacement).text,
+    retentionPrompt.replace("weak_reference", "fully_preserved"),
+);
+
 const pictures = promptCompletionItems(promptCompletionQuery("<Pic", 4), records);
 assert.deepEqual(pictures.map((item) => item.label), [
     "<Picture 1>", "<Picture 2>", "<Picture 3>", "<Picture 4>", "<Picture 5>",

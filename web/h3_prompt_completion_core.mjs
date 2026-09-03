@@ -6,7 +6,7 @@ import {
     H3_VISUAL_RETENTION_MARKERS,
     effectiveH3Mode,
     h3SectionsForMode,
-} from "./h3_prompt_schema_core.mjs?v=0.8.10";
+} from "./h3_prompt_schema_core.mjs?v=0.8.12";
 
 export const H3_LANGUAGE_MARKERS = Object.freeze([
     "[English]", "[French]", "[Spanish]", "[German]", "[Italian]",
@@ -75,16 +75,39 @@ function activeSectionAt(text, position) {
     return active;
 }
 
+function retentionLineContext(text, position) {
+    if (activeSectionAt(text, position) !== "retention_analysis") return null;
+    const lineStart = text.lastIndexOf("\n", Math.max(0, position - 1)) + 1;
+    const nextLine = text.indexOf("\n", position);
+    const lineEnd = nextLine < 0 ? text.length : nextLine;
+    return {lineStart, lineEnd, line:text.slice(lineStart, lineEnd)};
+}
+
+function retentionFamily(referenceKind) {
+    return String(referenceKind).toLowerCase() === "audio" ? "audio" : "visual";
+}
+
+function promptRetentionInsertionQuery(text, position, {manual = false} = {}) {
+    const context = retentionLineContext(text, position);
+    if (!context) return null;
+    const before = text.slice(context.lineStart, position);
+    const match = before.match(
+        /^\s*<(Subject|Picture|Video|Audio)\s+\d+>(?:\s*\([^\n)]*\))?\s*:\s*([A-Za-z_]*)$/i,
+    );
+    if (!match || (!manual && !match[2])) return null;
+    const typed = match[2];
+    return {trigger:`retention_${retentionFamily(match[1])}`,
+        start:position - typed.length, end:position, typed, query:typed, manual};
+}
+
 export function promptRetentionReplacementQuery(value, caret) {
     // Retention markers deliberately remain ordinary text in the editor. Only
     // a modifier-click in their canonical line position activates this query.
     const text = String(value ?? "");
     const position = clampedCaret(text, caret);
-    if (activeSectionAt(text, position) !== "retention_analysis") return null;
-    const lineStart = text.lastIndexOf("\n", Math.max(0, position - 1)) + 1;
-    const nextLine = text.indexOf("\n", position);
-    const lineEnd = nextLine < 0 ? text.length : nextLine;
-    const line = text.slice(lineStart, lineEnd);
+    const context = retentionLineContext(text, position);
+    if (!context) return null;
+    const {lineStart, line} = context;
     const markers = [...new Set([
         ...H3_VISUAL_RETENTION_MARKERS,
         ...H3_AUDIO_RETENTION_MARKERS,
@@ -99,7 +122,7 @@ export function promptRetentionReplacementQuery(value, caret) {
             /^\s*<(Subject|Picture|Video|Audio)\s+\d+>(?:\s*\([^\n)]*\))?\s*:\s*$/i,
         );
         if (!reference) return null;
-        const family = reference[1].toLowerCase() === "audio" ? "audio" : "visual";
+        const family = retentionFamily(reference[1]);
         const allowed = family === "audio"
             ? H3_AUDIO_RETENTION_MARKERS : H3_VISUAL_RETENTION_MARKERS;
         const canonical = allowed.find((item) => item === match[0].toLowerCase());
@@ -124,6 +147,8 @@ export function promptCompletionQuery(value, caret, {manual = false} = {}) {
         const result = specialQuery(before, trigger, pattern);
         if (result) return result;
     }
+    const retention = promptRetentionInsertionQuery(text, position, {manual});
+    if (retention) return retention;
     const section = before.match(/(?:^|\n)([A-Za-z_][A-Za-z_]*)$/);
     if (section && H3_ALL_SECTIONS.some((item) => item.startsWith(section[1].toLowerCase()))) {
         const typed = section[1];
@@ -246,7 +271,7 @@ function retentionItems(family) {
         ? H3_AUDIO_RETENTION_MARKERS : H3_VISUAL_RETENTION_MARKERS;
     return markers.map((label, index) => ({
         kind:"retention", label, insertText:label,
-        detail:RETENTION_DETAILS[label], priority:index,
+        appendText:" - ", detail:RETENTION_DETAILS[label], priority:index,
     }));
 }
 
@@ -301,13 +326,19 @@ export function applyPromptCompletion(value, query, item) {
     if (item.deleteToken) {
         after = after.replace(/^[ \t]+/, (spacing) => /[ \t]$/.test(before) ? "" : " ");
     }
-    const wantsSpace = Boolean(item.appendSpace && !query.replacement);
+    const appendText = query.replacement ? "" : String(item.appendText ?? "");
+    const hasAppendedText = appendText && after.startsWith(appendText);
+    const addedText = appendText && !hasAppendedText ? appendText : "";
+    const existingText = hasAppendedText ? appendText.length : 0;
+    if (addedText) after = after.replace(/^[ \t]+/, "");
+    const wantsSpace = Boolean(!appendText && item.appendSpace && !query.replacement);
     const addedSpace = wantsSpace && !/^\s/.test(after) ? " " : "";
     const existingSpace = wantsSpace && /^[ \t]/.test(after) ? 1 : 0;
-    const result = before + insertText + addedSpace + after;
+    const result = before + insertText + addedText + addedSpace + after;
     const relative = item.caretOffset == null ? insertText.length
         : Math.max(0, Math.min(insertText.length, Number(item.caretOffset) || 0));
-    const spacingOffset = relative === insertText.length ? addedSpace.length + existingSpace : 0;
+    const spacingOffset = relative === insertText.length
+        ? addedText.length + existingText + addedSpace.length + existingSpace : 0;
     return {text:result, caret:start + relative + spacingOffset};
 }
 
