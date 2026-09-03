@@ -1,7 +1,7 @@
 import {
     H3_ALL_SECTIONS,
     H3_MINIMAX_SPECIAL_TOKENS,
-} from "./h3_prompt_schema_core.mjs?v=0.8.9";
+} from "./h3_prompt_schema_core.mjs?v=0.8.10";
 
 export const H3_EDIT_ENCODER_NODE = "TextEncodeH3Edit";
 export const H3_EDIT_OPTIONS_NODE = "H3EditOptions";

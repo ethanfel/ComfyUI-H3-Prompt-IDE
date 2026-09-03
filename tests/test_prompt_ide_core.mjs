@@ -199,6 +199,13 @@ assert.deepEqual(
 assert.equal(parts.filter((part) => part.type === "dialogue").length, 2);
 assert.deepEqual(tokenizePrompt("Use @hero", [1]), [{type:"text", text:"Use @hero"}]);
 
+const retentionSyntax = tokenizePrompt(
+    "retention_analysis:\n<Subject 1>: weak_reference - broad similarity only.",
+);
+assert.equal(retentionSyntax.some((part) => part.kind === "retention"), false);
+assert.ok(retentionSyntax.some((part) => part.type === "text"
+    && part.text.includes("weak_reference")));
+
 const h3Syntax = tokenizePrompt(
     "subject_definitions:\n<Subject 1> (S1) says <d>[English] Hi<scenetrans> there<|cutoff|></d>",
     [],
@@ -249,8 +256,17 @@ assert.match(source, /Disable rich text and show the base prompt/);
 assert.match(source, /h3ide-token-label/);
 assert.match(source, /h3ide-token-replaceable/);
 assert.match(source, /state\.completion\?\.open\(query\)/);
+assert.match(source, /event\.ctrlKey \|\| event\.metaKey/);
+assert.match(source, /promptRetentionReplacementQuery/);
+assert.match(source, /caretPositionFromPoint/);
+assert.match(source, /caretRangeFromPoint/);
+assert.doesNotMatch(source, /h3ide-token-retention/);
 assert.match(source, /editorPlainText\(range\.cloneContents\(\), \{trimFinalNewline:false\}\)/);
-assert.match(source, /Type <, \[, \(, or a section name/);
+const focusEditorBody = source.match(/function focusCurrentEditor\(caret = null\) \{([\s\S]*?)\n    \}/)?.[1] ?? "";
+assert.ok(focusEditorBody.indexOf("state.editor?.focus()")
+    < focusEditorBody.indexOf("restoreCaret(state.editor, caret)"));
+assert.doesNotMatch(focusEditorBody, /renderText/);
+assert.match(source, /Type <, \[, \(, or section/);
 assert.match(source, /const caret = selectionTextOffset\(state\.editor\);\s+renderText\(editorPlainText\(state\.editor\), caret\);/);
 assert.doesNotMatch(source, /Type @, #/);
 

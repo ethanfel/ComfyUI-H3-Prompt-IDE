@@ -8,12 +8,13 @@ import {
     referenceFromInputName,
     tokenizePrompt,
     undoDirection,
-} from "./h3_prompt_ide_core.mjs?v=0.8.9";
+} from "./h3_prompt_ide_core.mjs?v=0.8.10";
 import {
     createPromptCompletionController,
+    promptRetentionReplacementQuery,
     promptTokenReplacementQuery,
-} from "./h3_prompt_completion_core.mjs?v=0.8.9";
-import {repairLegacyWidgetWidth} from "./h3_legacy_widget_width.mjs?v=0.8.9";
+} from "./h3_prompt_completion_core.mjs?v=0.8.10";
+import {repairLegacyWidgetWidth} from "./h3_legacy_widget_width.mjs?v=0.8.10";
 import {
     analyzeH3Prompt,
     effectiveH3Mode,
@@ -21,7 +22,7 @@ import {
     H3_MODES,
     h3ModeLabel,
     insertH3Section,
-} from "./h3_prompt_schema_core.mjs?v=0.8.9";
+} from "./h3_prompt_schema_core.mjs?v=0.8.10";
 
 // Standalone adaptation of the Rich Scene Prompt Editor originally authored
 // for ethanfel/ComfyUI-MiniMaxH3-Contex-Loop. Its rich reference presentation
@@ -389,6 +390,18 @@ function nodeTextOffset(editor, node) {
     return editorPlainText(range.cloneContents(), {trimFinalNewline:false}).length;
 }
 
+function pointerTextOffset(editor, event) {
+    const point = document.caretPositionFromPoint?.(event.clientX, event.clientY);
+    const fallback = point ? null : document.caretRangeFromPoint?.(event.clientX, event.clientY);
+    const node = point?.offsetNode ?? fallback?.startContainer;
+    const offset = point?.offset ?? fallback?.startOffset;
+    if (!node || offset == null || !editor.contains(node)) return selectionTextOffset(editor);
+    const range = document.createRange();
+    range.selectNodeContents(editor);
+    range.setEnd(node, offset);
+    return editorPlainText(range.cloneContents(), {trimFinalNewline:false}).length;
+}
+
 function restoreCaret(editor, requested) {
     const target = Math.max(0, Number(requested) || 0);
     const range = document.createRange();
@@ -531,8 +544,8 @@ function mountEditor(node) {
             state.plainEditor.setSelectionRange(position, position);
             return;
         }
-        if (caret != null) renderText(currentText(), caret);
         state.editor?.focus();
+        if (state.editor && caret != null) restoreCaret(state.editor, caret);
     }
 
     function selectedCurrentText() {
@@ -1066,7 +1079,7 @@ function mountEditor(node) {
         element("span", "h3ide-spacer"),
         smaller,
         larger,
-        element("span", "h3ide-completion-hint", "Type <, [, (, or a section name · Ctrl/Cmd+Space for all H3 completions"),
+        element("span", "h3ide-completion-hint", "Type <, [, (, or section · Ctrl/Cmd+Space: all · Ctrl/Cmd+click: retention options"),
     );
 
     state.tray = element("div", "h3ide-ref-tray");
@@ -1138,12 +1151,16 @@ function mountEditor(node) {
     });
     state.editor.addEventListener("click", (event) => {
         const token = event.target?.closest?.(".h3ide-token-replaceable");
-        if (!token || !state.editor.contains(token)) return;
         const text = editorPlainText(state.editor);
-        const start = nodeTextOffset(state.editor, token);
-        const query = promptTokenReplacementQuery(
-            text, start, start + String(token.dataset.token ?? "").length,
-        );
+        let query = null;
+        if (token && state.editor.contains(token)) {
+            const start = nodeTextOffset(state.editor, token);
+            query = promptTokenReplacementQuery(
+                text, start, start + String(token.dataset.token ?? "").length,
+            );
+        } else if (event.ctrlKey || event.metaKey) {
+            query = promptRetentionReplacementQuery(text, pointerTextOffset(state.editor, event));
+        }
         if (!query) return;
         event.preventDefault();
         restoreCaret(state.editor, query.end);

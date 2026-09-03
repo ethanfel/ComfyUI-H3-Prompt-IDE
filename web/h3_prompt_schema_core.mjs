@@ -69,6 +69,20 @@ export const H3_TASK_DIRECTIVES = Object.freeze([
     "[video continuation + reference generation + audio reuse]",
 ]);
 
+export const H3_VISUAL_RETENTION_MARKERS = Object.freeze([
+    "fully_preserved",
+    "partially_preserved",
+    "attribute_transfer",
+    "weak_reference",
+]);
+
+export const H3_AUDIO_RETENTION_MARKERS = Object.freeze([
+    "fully_copy",
+    "partially_copy",
+    "reference",
+    "weak_reference",
+]);
+
 const MODE_IDS = new Set(H3_MODES.map((item) => item.id));
 const ALIGNMENT_PREFIX = /^(?:For the target video, at 0\.00 seconds into the target video,|How the reference pictures align with the target video —).*$/m;
 const SECTION_PATTERN = new RegExp(

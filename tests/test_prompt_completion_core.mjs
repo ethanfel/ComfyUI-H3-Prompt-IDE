@@ -1,11 +1,17 @@
 import assert from "node:assert/strict";
+import fs from "node:fs";
 import {
     applyPromptCompletion,
     promptCompletionItems,
     promptCompletionQuery,
+    promptRetentionReplacementQuery,
     promptTokenReplacementQuery,
 } from "../web/h3_prompt_completion_core.mjs";
-import {H3_MINIMAX_SPECIAL_TOKENS} from "../web/h3_prompt_schema_core.mjs";
+import {
+    H3_AUDIO_RETENTION_MARKERS,
+    H3_MINIMAX_SPECIAL_TOKENS,
+    H3_VISUAL_RETENTION_MARKERS,
+} from "../web/h3_prompt_schema_core.mjs";
 
 const records = [
     {kind:"picture", token:"<Picture 1>", ordinal:1},
@@ -24,7 +30,7 @@ const pastedReference = "<Audio 1>: reference - its vocal timbre guides <Subject
 const pastedAudioQuery = promptCompletionQuery(pastedReference, 6);
 assert.deepEqual(pastedAudioQuery, {
     trigger:"<", start:0, end:9, typed:"<Audio 1>", query:"Audio",
-    manual:false, replacement:true,
+    manual:false, replacement:true, allowDelete:true,
 });
 const audioReplacement = promptCompletionItems(pastedAudioQuery, records)
     .find((item) => item.label === "<Audio 2>");
@@ -38,14 +44,54 @@ assert.equal(promptCompletionQuery(pastedReference, subjectStart + 5).end,
 const richTokenQuery = promptTokenReplacementQuery("Use <Picture 1> here", 4, 15);
 assert.deepEqual(richTokenQuery, {
     trigger:"<", start:4, end:15, typed:"<Picture 1>", query:"Picture",
-    manual:false, replacement:true,
+    manual:false, replacement:true, allowDelete:true,
 });
 assert.deepEqual(promptCompletionItems(richTokenQuery, records).map((item) => item.label), [
     "<Picture 1>", "<Picture 2>", "<Picture 3>", "<Picture 4>", "<Picture 5>",
     "<Picture 6>", "<Picture 7>", "<Picture 8>", "<Picture 9>",
+    "Delete <Picture 1>",
 ]);
+const deletePicture = promptCompletionItems(richTokenQuery, records).at(-1);
+assert.deepEqual(applyPromptCompletion("Use <Picture 1> here", richTokenQuery, deletePicture), {
+    text:"Use here", caret:4,
+});
+const joinedTokenQuery = promptTokenReplacementQuery("Use<Picture 1>  here", 3, 14);
+assert.deepEqual(applyPromptCompletion(
+    "Use<Picture 1>  here", joinedTokenQuery,
+    promptCompletionItems(joinedTokenQuery, records).at(-1),
+), {text:"Use here", caret:3});
 assert.equal(promptTokenReplacementQuery("(S2)", 0, 4).query, "S");
 assert.equal(promptTokenReplacementQuery("subject_definitions:", 0, 20), null);
+
+const retentionPrompt = `subject_definitions:
+<Subject 1> is a baker.
+
+retention_analysis:
+<Subject 1> (appears in [Shot 1]): weak_reference - only the broad wardrobe palette remains.
+<Audio 1>: reference - its vocal timbre guides the delivery.
+
+detailed_description:
+[Shot 1] The weak_reference phrase here is ordinary prose.`;
+const visualMarker = retentionPrompt.indexOf("weak_reference");
+const visualRetentionQuery = promptRetentionReplacementQuery(
+    retentionPrompt, visualMarker + 4,
+);
+assert.equal(visualRetentionQuery.trigger, "retention_visual");
+assert.deepEqual(
+    promptCompletionItems(visualRetentionQuery).map((item) => item.label),
+    [...H3_VISUAL_RETENTION_MARKERS],
+);
+const audioMarker = retentionPrompt.indexOf(": reference") + 2;
+const audioRetentionQuery = promptRetentionReplacementQuery(
+    retentionPrompt, audioMarker + 3,
+);
+assert.equal(audioRetentionQuery.trigger, "retention_audio");
+assert.deepEqual(
+    promptCompletionItems(audioRetentionQuery).map((item) => item.label),
+    [...H3_AUDIO_RETENTION_MARKERS],
+);
+const proseMarker = retentionPrompt.lastIndexOf("weak_reference");
+assert.equal(promptRetentionReplacementQuery(retentionPrompt, proseMarker + 4), null);
 
 const pictures = promptCompletionItems(promptCompletionQuery("<Pic", 4), records);
 assert.deepEqual(pictures.map((item) => item.label), [
@@ -107,5 +153,10 @@ const editManual = promptCompletionItems(
 );
 assert.equal(editManual.some((item) => item.kind === "section"), false);
 assert.ok(editManual.some((item) => item.label === "<Picture 1>"));
+
+const completionSource = fs.readFileSync(
+    new URL("../web/h3_prompt_completion_core.mjs", import.meta.url), "utf8");
+const acceptBody = completionSource.match(/function accept\(index = selected\) \{([\s\S]*?)\n    \}/)?.[1] ?? "";
+assert.ok(acceptBody.indexOf("input.focus()") < acceptBody.indexOf("replaceText(result, item)"));
 
 console.log("H3 standalone completion tests passed");

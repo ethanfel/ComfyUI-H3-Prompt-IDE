@@ -1,10 +1,12 @@
 import {
     H3_ALL_SECTIONS,
+    H3_AUDIO_RETENTION_MARKERS,
     H3_MINIMAX_SPECIAL_TOKENS,
     H3_TASK_DIRECTIVES,
+    H3_VISUAL_RETENTION_MARKERS,
     effectiveH3Mode,
     h3SectionsForMode,
-} from "./h3_prompt_schema_core.mjs?v=0.8.9";
+} from "./h3_prompt_schema_core.mjs?v=0.8.10";
 
 export const H3_LANGUAGE_MARKERS = Object.freeze([
     "[English]", "[French]", "[Spanish]", "[German]", "[Italian]",
@@ -54,10 +56,56 @@ export function promptTokenReplacementQuery(value, requestedStart, requestedEnd)
     if (angle) {
         const reference = typed.match(/^<(Picture|Video|Audio|Subject)\s+\d+>$/i);
         return {trigger:"<", start, end, typed,
-            query:reference?.[1] ?? angle[1], manual:false, replacement:true};
+            query:reference?.[1] ?? angle[1], manual:false, replacement:true,
+            allowDelete:true};
     }
     if (/^\(S\d+(?:,S\d+)*\)$/i.test(typed)) {
-        return {trigger:"(", start, end, typed, query:"S", manual:false, replacement:true};
+        return {trigger:"(", start, end, typed, query:"S", manual:false,
+            replacement:true, allowDelete:true};
+    }
+    return null;
+}
+
+function activeSectionAt(text, position) {
+    const pattern = new RegExp(`^(${H3_ALL_SECTIONS.join("|")}):`, "gim");
+    let active = null;
+    for (const match of text.slice(0, position + 1).matchAll(pattern)) {
+        active = match[1].toLowerCase();
+    }
+    return active;
+}
+
+export function promptRetentionReplacementQuery(value, caret) {
+    // Retention markers deliberately remain ordinary text in the editor. Only
+    // a modifier-click in their canonical line position activates this query.
+    const text = String(value ?? "");
+    const position = clampedCaret(text, caret);
+    if (activeSectionAt(text, position) !== "retention_analysis") return null;
+    const lineStart = text.lastIndexOf("\n", Math.max(0, position - 1)) + 1;
+    const nextLine = text.indexOf("\n", position);
+    const lineEnd = nextLine < 0 ? text.length : nextLine;
+    const line = text.slice(lineStart, lineEnd);
+    const markers = [...new Set([
+        ...H3_VISUAL_RETENTION_MARKERS,
+        ...H3_AUDIO_RETENTION_MARKERS,
+    ])];
+    const pattern = new RegExp(`\\b(${markers.join("|")})\\b`, "gi");
+    for (const match of line.matchAll(pattern)) {
+        const start = lineStart + (match.index ?? 0);
+        const end = start + match[0].length;
+        if (position < start || position > end) continue;
+        const before = line.slice(0, match.index ?? 0);
+        const reference = before.match(
+            /^\s*<(Subject|Picture|Video|Audio)\s+\d+>(?:\s*\([^\n)]*\))?\s*:\s*$/i,
+        );
+        if (!reference) return null;
+        const family = reference[1].toLowerCase() === "audio" ? "audio" : "visual";
+        const allowed = family === "audio"
+            ? H3_AUDIO_RETENTION_MARKERS : H3_VISUAL_RETENTION_MARKERS;
+        const canonical = allowed.find((item) => item === match[0].toLowerCase());
+        if (!canonical) return null;
+        return {trigger:`retention_${family}`, start, end, typed:match[0], query:"",
+            manual:false, replacement:true};
     }
     return null;
 }
@@ -183,6 +231,25 @@ function speakerItems() {
     return items;
 }
 
+const RETENTION_DETAILS = Object.freeze({
+    fully_preserved:"Preserve the defined visual role completely",
+    partially_preserved:"Retain the reference with defined changes",
+    attribute_transfer:"Transfer referenced traits to another subject",
+    fully_copy:"Reuse the complete source audio signal",
+    partially_copy:"Reuse only part of the signal or its layers",
+    reference:"Guide audio without copying the source signal",
+    weak_reference:"Retain only broad similarity or atmosphere",
+});
+
+function retentionItems(family) {
+    const markers = family === "audio"
+        ? H3_AUDIO_RETENTION_MARKERS : H3_VISUAL_RETENTION_MARKERS;
+    return markers.map((label, index) => ({
+        kind:"retention", label, insertText:label,
+        detail:RETENTION_DETAILS[label], priority:index,
+    }));
+}
+
 function sectionItems(text, mode) {
     const effective = effectiveH3Mode(text, mode);
     return h3SectionsForMode(effective).map((section, index) => ({
@@ -206,14 +273,21 @@ export function promptCompletionItems(query, records = [], {text = "", mode = "a
     if (query.trigger === "<") items = referenceItems(records);
     else if (query.trigger === "[") items = bracketItems();
     else if (query.trigger === "(") items = speakerItems();
+    else if (query.trigger === "retention_visual") items = retentionItems("visual");
+    else if (query.trigger === "retention_audio") items = retentionItems("audio");
     else if (query.trigger === "section") items = sectionItems(text, mode);
     else items = [...referenceItems(records), ...bracketItems(), ...speakerItems(), ...sectionItems(text, mode)];
-    return unique(items).map((item) => ({item, score:score(item, query.query)}))
+    const result = unique(items).map((item) => ({item, score:score(item, query.query)}))
         .filter((entry) => entry.score != null)
         .sort((left, right) => left.score - right.score
             || (left.item.priority ?? 0) - (right.item.priority ?? 0)
             || left.item.label.localeCompare(right.item.label))
         .slice(0, Math.max(1, Number(limit) || 40)).map((entry) => entry.item);
+    if (query.allowDelete) result.push({
+        kind:"delete", label:`Delete ${query.typed}`, insertText:"",
+        detail:"Remove this token", deleteToken:true,
+    });
+    return result;
 }
 
 export function applyPromptCompletion(value, query, item) {
@@ -222,11 +296,15 @@ export function applyPromptCompletion(value, query, item) {
     const start = Math.max(0, Math.min(text.length, Number(query.start) || 0));
     const end = Math.max(start, Math.min(text.length, Number(query.end) || start));
     const insertText = String(item.insertText ?? item.label ?? "");
-    const after = text.slice(end);
+    const before = text.slice(0, start);
+    let after = text.slice(end);
+    if (item.deleteToken) {
+        after = after.replace(/^[ \t]+/, (spacing) => /[ \t]$/.test(before) ? "" : " ");
+    }
     const wantsSpace = Boolean(item.appendSpace && !query.replacement);
     const addedSpace = wantsSpace && !/^\s/.test(after) ? " " : "";
     const existingSpace = wantsSpace && /^[ \t]/.test(after) ? 1 : 0;
-    const result = text.slice(0, start) + insertText + addedSpace + after;
+    const result = before + insertText + addedSpace + after;
     const relative = item.caretOffset == null ? insertText.length
         : Math.max(0, Math.min(insertText.length, Number(item.caretOffset) || 0));
     const spacingOffset = relative === insertText.length ? addedSpace.length + existingSpace : 0;
@@ -246,6 +324,7 @@ function injectStyles() {
       .h3pc-option { display:grid; grid-template-columns:auto minmax(0,1fr); gap:2px 8px;
         align-items:center; padding:6px 7px; border-radius:5px; cursor:pointer; }
       .h3pc-option[aria-selected="true"] { background:color-mix(in srgb,#5e8fff 24%,transparent); }
+      .h3pc-option-delete { color:#ff8f8f; }
       .h3pc-kind { grid-row:1/3; min-width:28px; padding:2px 4px; border:1px solid #65738a;
         border-radius:4px; color:color-mix(in srgb,var(--input-text,#eef2f8) 72%,transparent);
         text-align:center; font-size:9px; font-weight:750; text-transform:uppercase; }
@@ -318,8 +397,11 @@ export function createPromptCompletionController({
     function accept(index = selected) {
         const item = currentItems[index];
         if (!item || !currentQuery) return false;
-        replaceText(applyPromptCompletion(getText(), currentQuery, item), item);
-        hide(); input.focus(); return true;
+        const result = applyPromptCompletion(getText(), currentQuery, item);
+        hide();
+        input.focus();
+        replaceText(result, item);
+        return true;
     }
 
     function render() {
@@ -327,7 +409,7 @@ export function createPromptCompletionController({
         currentItems.forEach((item, index) => {
             const option = document.createElement("div");
             option.id = `${menuId}-option-${index}`;
-            option.className = "h3pc-option";
+            option.className = `h3pc-option${item.kind === "delete" ? " h3pc-option-delete" : ""}`;
             option.setAttribute("role", "option");
             const kind = document.createElement("span");
             kind.className = "h3pc-kind";
@@ -345,13 +427,16 @@ export function createPromptCompletionController({
         menu.hidden = false; input.setAttribute("aria-expanded", "true"); updateActive(); position();
     }
 
-    function show(query, {resetSelection = false} = {}) {
+    function show(query, {selectCurrent = false} = {}) {
         const text = String(getText?.() ?? "");
         currentQuery = query;
         currentItems = promptCompletionItems(currentQuery, getRecords(), {
             text, mode:getMode(), limit:maxItems,
         });
-        if (resetSelection) selected = 0;
+        if (selectCurrent) {
+            const current = currentItems.findIndex((item) => item.insertText === query?.typed);
+            selected = current < 0 ? 0 : current;
+        }
         selected = Math.min(selected, Math.max(0, currentItems.length - 1));
         if (!currentQuery || !currentItems.length) hide(); else render();
         return !menu.hidden;
@@ -363,7 +448,7 @@ export function createPromptCompletionController({
     }
 
     function open(query) {
-        return show(query, {resetSelection:true});
+        return show(query, {selectCurrent:true});
     }
 
     function handleKeydown(event) {
