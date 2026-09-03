@@ -6,7 +6,7 @@ import {
     H3_VISUAL_RETENTION_MARKERS,
     effectiveH3Mode,
     h3SectionsForMode,
-} from "./h3_prompt_schema_core.mjs?v=0.8.13";
+} from "./h3_prompt_schema_core.mjs?v=0.8.14";
 
 export const H3_LANGUAGE_MARKERS = Object.freeze([
     "[English]", "[French]", "[Spanish]", "[German]", "[Italian]",
@@ -95,8 +95,13 @@ function promptRetentionInsertionQuery(text, position, {manual = false} = {}) {
         /^\s*<(Subject|Picture|Video|Audio)\s+\d+>(?:\s*\([^\n)]*\))?\s*:\s*([A-Za-z_]*)$/i,
     );
     if (!match || (!manual && !match[2])) return null;
+    const family = retentionFamily(match[1]);
+    const markers = family === "audio"
+        ? H3_AUDIO_RETENTION_MARKERS : H3_VISUAL_RETENTION_MARKERS;
+    const completeMarker = new RegExp(`:\\s*(?:${markers.join("|")})\\b`, "i");
+    if (completeMarker.test(context.line)) return null;
     const typed = match[2];
-    return {trigger:`retention_${retentionFamily(match[1])}`,
+    return {trigger:`retention_${family}`,
         start:position - typed.length, end:position, typed, query:typed, manual};
 }
 
@@ -505,7 +510,11 @@ export function createPromptCompletionController({
     }
 
     const onBlur = () => globalThis.setTimeout?.(() => { if (!menu.matches(":hover")) hide(); }, 100);
-    const onClick = () => refresh();
+    // A normal click only moves the caret. Re-querying here can reinterpret the
+    // prefix before a mid-word caret as a new completion and corrupt an existing
+    // retention marker. Explicit token and Ctrl/Cmd-click replacements call
+    // open() from the editor's click handler after this dismissal.
+    const onClick = () => hide();
     const onKeyup = (event) => { if (["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) refresh(); };
     const onResize = () => { if (!menu.hidden) position(); };
     input.addEventListener("blur", onBlur);

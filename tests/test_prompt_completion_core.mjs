@@ -157,6 +157,19 @@ assert.equal(
     applyPromptCompletion(retentionPrompt, visualRetentionQuery, visualReplacement).text,
     retentionPrompt.replace("weak_reference", "fully_preserved"),
 );
+const completedMarkerLine = "retention_analysis:\n<Picture 1>: attribute_transfer - only the general vocal atmosphere is retained. f";
+const misleadingMarkerCaret = completedMarkerLine.indexOf("attribute_transfer") + 1;
+assert.equal(promptCompletionQuery(completedMarkerLine, misleadingMarkerCaret), null);
+assert.equal(promptCompletionQuery(
+    completedMarkerLine, completedMarkerLine.length,
+), null);
+const clickedWeakReference = "retention_analysis:\n<Picture 1>: weak_reference - explanation";
+for (let offset = 1; offset < "weak_reference".length; offset += 1) {
+    assert.equal(promptCompletionQuery(
+        clickedWeakReference,
+        clickedWeakReference.indexOf("weak_reference") + offset,
+    ), null);
+}
 
 const pictures = promptCompletionItems(promptCompletionQuery("<Pic", 4), records);
 assert.deepEqual(pictures.map((item) => item.label), [
@@ -223,5 +236,6 @@ const completionSource = fs.readFileSync(
     new URL("../web/h3_prompt_completion_core.mjs", import.meta.url), "utf8");
 const acceptBody = completionSource.match(/function accept\(index = selected\) \{([\s\S]*?)\n    \}/)?.[1] ?? "";
 assert.ok(acceptBody.indexOf("input.focus()") < acceptBody.indexOf("replaceText(result, item)"));
+assert.match(completionSource, /const onClick = \(\) => hide\(\);/);
 
 console.log("H3 standalone completion tests passed");
