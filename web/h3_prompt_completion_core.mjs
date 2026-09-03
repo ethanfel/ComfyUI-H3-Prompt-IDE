@@ -6,7 +6,7 @@ import {
     H3_VISUAL_RETENTION_MARKERS,
     effectiveH3Mode,
     h3SectionsForMode,
-} from "./h3_prompt_schema_core.mjs?v=0.8.15";
+} from "./h3_prompt_schema_core.mjs?v=0.8.16";
 
 export const H3_LANGUAGE_MARKERS = Object.freeze([
     "[English]", "[French]", "[Spanish]", "[German]", "[Italian]",

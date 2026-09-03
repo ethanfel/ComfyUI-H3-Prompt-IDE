@@ -8,14 +8,14 @@ import {
     referenceFromInputName,
     tokenizePrompt,
     undoDirection,
-} from "./h3_prompt_ide_core.mjs?v=0.8.15";
+} from "./h3_prompt_ide_core.mjs?v=0.8.16";
 import {
     createPromptCompletionController,
     promptRetentionMarkerRanges,
     promptRetentionReplacementQuery,
     promptTokenReplacementQuery,
-} from "./h3_prompt_completion_core.mjs?v=0.8.15";
-import {repairLegacyWidgetWidth} from "./h3_legacy_widget_width.mjs?v=0.8.15";
+} from "./h3_prompt_completion_core.mjs?v=0.8.16";
+import {repairLegacyWidgetWidth} from "./h3_legacy_widget_width.mjs?v=0.8.16";
 import {
     analyzeH3Prompt,
     effectiveH3Mode,
@@ -23,7 +23,7 @@ import {
     H3_MODES,
     h3ModeLabel,
     insertH3Section,
-} from "./h3_prompt_schema_core.mjs?v=0.8.15";
+} from "./h3_prompt_schema_core.mjs?v=0.8.16";
 
 // Standalone adaptation of the Rich Scene Prompt Editor originally authored
 // for ethanfel/ComfyUI-MiniMaxH3-Contex-Loop. Its rich reference presentation
@@ -1186,6 +1186,7 @@ function mountEditor(node) {
     });
     state.editor.addEventListener("click", (event) => {
         const token = event.target?.closest?.(".h3ide-token-replaceable");
+        const retentionMarker = event.target?.closest?.(".h3ide-retention-marker");
         const text = editorPlainText(state.editor);
         let query = null;
         if (token && state.editor.contains(token)) {
@@ -1193,6 +1194,10 @@ function mountEditor(node) {
             query = promptTokenReplacementQuery(
                 text, start, start + String(token.dataset.token ?? "").length,
             );
+        } else if ((event.ctrlKey || event.metaKey) && retentionMarker
+                && state.editor.contains(retentionMarker)) {
+            const start = nodeTextOffset(state.editor, retentionMarker);
+            query = promptRetentionReplacementQuery(text, start + 1);
         } else if (event.ctrlKey || event.metaKey) {
             query = promptRetentionReplacementQuery(text, pointerTextOffset(state.editor, event));
         }

@@ -262,6 +262,7 @@ assert.match(source, /promptRetentionMarkerRanges/);
 assert.match(source, /h3ide-retention-modifier/);
 assert.match(source, /h3ide-retention-marker/);
 assert.match(source, /Ctrl\/Cmd-click \$\{range\.marker\} to replace it/);
+assert.match(source, /nodeTextOffset\(state\.editor, retentionMarker\)/);
 assert.match(source, /Ctrl\/Cmd-click a retention value such as weak_reference to replace it/);
 assert.match(source, /Start typing or press Ctrl\/Cmd\+Space after a retention-analysis colon/);
 assert.match(source, /caretPositionFromPoint/);
