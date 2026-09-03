@@ -6,7 +6,7 @@ import {
     H3_VISUAL_RETENTION_MARKERS,
     effectiveH3Mode,
     h3SectionsForMode,
-} from "./h3_prompt_schema_core.mjs?v=0.8.12";
+} from "./h3_prompt_schema_core.mjs?v=0.8.13";
 
 export const H3_LANGUAGE_MARKERS = Object.freeze([
     "[English]", "[French]", "[Spanish]", "[German]", "[Italian]",
@@ -271,7 +271,8 @@ function retentionItems(family) {
         ? H3_AUDIO_RETENTION_MARKERS : H3_VISUAL_RETENTION_MARKERS;
     return markers.map((label, index) => ({
         kind:"retention", label, insertText:label,
-        appendText:" - ", detail:RETENTION_DETAILS[label], priority:index,
+        appendText:" - ", normalizeColon:true,
+        detail:RETENTION_DETAILS[label], priority:index,
     }));
 }
 
@@ -321,8 +322,11 @@ export function applyPromptCompletion(value, query, item) {
     const start = Math.max(0, Math.min(text.length, Number(query.start) || 0));
     const end = Math.max(start, Math.min(text.length, Number(query.end) || start));
     const insertText = String(item.insertText ?? item.label ?? "");
-    const before = text.slice(0, start);
+    let before = text.slice(0, start);
     let after = text.slice(end);
+    if (item.normalizeColon && !query.replacement) {
+        before = before.replace(/[ \t]*:[ \t]*$/, ": ");
+    }
     if (item.deleteToken) {
         after = after.replace(/^[ \t]+/, (spacing) => /[ \t]$/.test(before) ? "" : " ");
     }
@@ -339,7 +343,7 @@ export function applyPromptCompletion(value, query, item) {
         : Math.max(0, Math.min(insertText.length, Number(item.caretOffset) || 0));
     const spacingOffset = relative === insertText.length
         ? addedText.length + existingText + addedSpace.length + existingSpace : 0;
-    return {text:result, caret:start + relative + spacingOffset};
+    return {text:result, caret:before.length + relative + spacingOffset};
 }
 
 function injectStyles() {

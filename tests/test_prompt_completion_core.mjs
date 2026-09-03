@@ -134,6 +134,15 @@ assert.equal(applyPromptCompletion(
     insertionBeforeProseQuery,
     promptCompletionItems(insertionBeforeProseQuery)[0],
 ).text, `${visualInsertionPrompt}weak_reference - existing explanation`);
+const misplacedColonSpace = "retention_analysis:\n<Picture 1> :wea";
+const misplacedColonQuery = promptCompletionQuery(
+    misplacedColonSpace, misplacedColonSpace.length,
+);
+assert.equal(applyPromptCompletion(
+    misplacedColonSpace,
+    misplacedColonQuery,
+    promptCompletionItems(misplacedColonQuery)[0],
+).text, "retention_analysis:\n<Picture 1>: weak_reference - ");
 const audioInsertionPrompt = "retention_analysis:\n<Audio 1>: ful";
 const audioInsertionQuery = promptCompletionQuery(
     audioInsertionPrompt, audioInsertionPrompt.length,
