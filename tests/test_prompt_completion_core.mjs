@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import {
     applyPromptCompletion,
+    promptBracketReplacementQuery,
     promptCompletionItems,
     promptCompletionQuery,
     promptRetentionReplacementQuery,
@@ -64,6 +65,11 @@ assert.equal(promptTokenReplacementQuery("(S2)", 0, 4).query, "S");
 assert.equal(promptTokenReplacementQuery("subject_definitions:", 0, 20), null);
 const shotQuery = promptTokenReplacementQuery("[Shot 2]", 0, 8);
 assert.equal(shotQuery.trigger, "shot");
+assert.deepEqual(promptBracketReplacementQuery("Use [Shot 2] here", 7), {
+    trigger:"shot", start:4, end:12, typed:"[Shot 2]", query:"", manual:false,
+    replacement:true, allowDelete:true,
+});
+assert.equal(promptBracketReplacementQuery("Use [ordinary note] here", 8), null);
 assert.deepEqual(
     promptCompletionItems(shotQuery).map((item) => item.label),
     [...Array.from({length:12}, (_, index) => `[Shot ${index + 1}]`), "Delete [Shot 2]"],
@@ -80,9 +86,11 @@ assert.equal(applyPromptCompletion(
 ).text, "Appears in [Shot 3] and [Shot 4]");
 const languageQuery = promptTokenReplacementQuery("[English]", 0, 9);
 assert.equal(languageQuery.trigger, "language");
+assert.equal(promptBracketReplacementQuery("<d>[English] Hi</d>", 6).trigger, "language");
 assert.ok(promptCompletionItems(languageQuery).some((item) => item.label === "[French]"));
 const directiveQuery = promptTokenReplacementQuery("[reference generation]", 0, 22);
 assert.equal(directiveQuery.trigger, "directive");
+assert.equal(promptBracketReplacementQuery("[reference generation] Text", 10).trigger, "directive");
 assert.ok(promptCompletionItems(directiveQuery)
     .some((item) => item.label === "[video editing]"));
 assert.equal(promptTokenReplacementQuery("[ordinary note]", 0, 15), null);

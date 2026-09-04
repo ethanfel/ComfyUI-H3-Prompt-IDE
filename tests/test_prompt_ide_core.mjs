@@ -204,18 +204,15 @@ const retentionSyntax = tokenizePrompt(
 );
 assert.equal(retentionSyntax.some((part) => part.kind === "retention"), false);
 assert.ok(retentionSyntax.some((part) => part.type === "text"
-    && part.text.includes("weak_reference")));
-assert.deepEqual(
-    retentionSyntax.filter((part) => part.type === "shot").map((part) => part.text),
-    ["[Shot 1]"],
-);
+    && part.text.includes("[Shot 1]): weak_reference")));
+assert.equal(retentionSyntax.some((part) => part.type === "shot"), false);
 
 const bracketSyntax = tokenizePrompt(
     "[reference generation] <Subject 1> appears in [Shot 1]. <d>[English] Hi</d>",
 );
 assert.deepEqual(
     bracketSyntax.filter((part) => part.type !== "text").map((part) => part.type),
-    ["directive", "subject", "shot", "dialogue", "language", "dialogue"],
+    ["subject", "dialogue", "dialogue"],
 );
 assert.deepEqual(tokenizePrompt("Use [ordinary note] here"), [
     {type:"text", text:"Use [ordinary note] here"},
@@ -226,7 +223,7 @@ const h3Syntax = tokenizePrompt(
     [],
 ).filter((part) => part.type !== "text");
 assert.deepEqual(h3Syntax.map((part) => part.type), [
-    "section", "subject", "speaker", "dialogue", "language", "flow", "flow", "dialogue",
+    "section", "subject", "speaker", "dialogue", "flow", "flow", "dialogue",
 ]);
 
 const specialSyntax = tokenizePrompt(H3_MINIMAX_SPECIAL_TOKENS.join(" "))
@@ -270,12 +267,13 @@ assert.match(source, /state\.richText \? "Rich text" : "Plain text"/);
 assert.match(source, /Disable rich text and show the base prompt/);
 assert.match(source, /h3ide-token-label/);
 assert.match(source, /h3ide-token-replaceable/);
-assert.match(source, /h3ide-token-shot/);
-assert.match(source, /\["section", "shot", "language", "directive"\]/);
+assert.doesNotMatch(source, /h3ide-token-shot/);
+assert.match(source, /part\.type === "section"/);
 assert.match(source, /state\.completion\?\.open\(query\)/);
 assert.match(source, /event\.ctrlKey \|\| event\.metaKey/);
 assert.match(source, /promptRetentionReplacementQuery/);
-assert.match(source, /Ctrl\/Cmd-click a retention value such as weak_reference to replace it/);
+assert.match(source, /promptBracketReplacementQuery/);
+assert.match(source, /Ctrl\/Cmd-click a retention value or bracket marker such as \[Shot 2\] to replace it/);
 assert.match(source, /Start typing or press Ctrl\/Cmd\+Space after a retention-analysis colon/);
 assert.match(source, /caretPositionFromPoint/);
 assert.match(source, /caretRangeFromPoint/);

@@ -7,7 +7,7 @@ import {
     H3_VISUAL_RETENTION_MARKERS,
     effectiveH3Mode,
     h3SectionsForMode,
-} from "./h3_prompt_schema_core.mjs?v=0.8.18";
+} from "./h3_prompt_schema_core.mjs?v=0.8.19";
 
 export {H3_LANGUAGE_MARKERS};
 
@@ -71,6 +71,21 @@ export function promptTokenReplacementQuery(value, requestedStart, requestedEnd)
     if (/^\(S\d+(?:,S\d+)*\)$/i.test(typed)) {
         return {trigger:"(", start, end, typed, query:"S", manual:false,
             replacement:true, allowDelete:true};
+    }
+    return null;
+}
+
+export function promptBracketReplacementQuery(value, caret) {
+    // Structural bracket markers stay ordinary text, like retention values.
+    // A modifier-click resolves the marker under the pointer for replacement.
+    const text = String(value ?? "");
+    const position = clampedCaret(text, caret);
+    for (const match of text.matchAll(/\[[^\]\n]{1,96}\]/g)) {
+        const start = match.index ?? 0;
+        const end = start + match[0].length;
+        if (position < start || position > end) continue;
+        const query = promptTokenReplacementQuery(text, start, end);
+        return ["shot", "language", "directive"].includes(query?.trigger) ? query : null;
     }
     return null;
 }

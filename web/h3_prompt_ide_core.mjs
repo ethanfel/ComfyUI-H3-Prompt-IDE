@@ -1,9 +1,7 @@
 import {
     H3_ALL_SECTIONS,
-    H3_LANGUAGE_MARKERS,
     H3_MINIMAX_SPECIAL_TOKENS,
-    H3_TASK_DIRECTIVES,
-} from "./h3_prompt_schema_core.mjs?v=0.8.18";
+} from "./h3_prompt_schema_core.mjs?v=0.8.19";
 
 export const H3_EDIT_ENCODER_NODE = "TextEncodeH3Edit";
 export const H3_EDIT_OPTIONS_NODE = "H3EditOptions";
@@ -287,13 +285,8 @@ export function pictureOrdinalFromInputName(name) {
 }
 
 const SECTION_ALTERNATION = H3_ALL_SECTIONS.join("|");
-const BRACKET_ALTERNATION = [
-    "\\[Shot\\s+\\d+\\]",
-    ...[...H3_LANGUAGE_MARKERS, ...H3_TASK_DIRECTIVES]
-        .map((token) => token.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")),
-].join("|");
 const TOKEN_PATTERN = new RegExp(
-    `^(${SECTION_ALTERNATION}):|(${BRACKET_ALTERNATION})|(<(?:Picture|Video|Audio|Subject)\\s+\\d+>|<\\/?d>|<\\|(?:cutoff|lyrics_start|lyrics_end|caption_start|caption_end)\\|>|<scenetrans>|<cutoff>|\\(S\\d+(?:,S\\d+)*\\))`,
+    `^(${SECTION_ALTERNATION}):|(<(?:Picture|Video|Audio|Subject)\\s+\\d+>|<\\/?d>|<\\|(?:cutoff|lyrics_start|lyrics_end|caption_start|caption_end)\\|>|<scenetrans>|<cutoff>|\\(S\\d+(?:,S\\d+)*\\))`,
     "gim",
 );
 
@@ -327,9 +320,6 @@ export function tokenizePrompt(value, connectedReferences = []) {
         const section = tag.endsWith(":")
             ? H3_ALL_SECTIONS.find((item) => `${item}:` === tag) : null;
         const externalReference = tag.match(/^<(picture|video|audio)\s+(\d+)>$/);
-        const shot = tag.match(/^\[shot\s+(\d+)\]$/);
-        const language = H3_LANGUAGE_MARKERS.find((marker) => marker.toLowerCase() === tag);
-        const directive = H3_TASK_DIRECTIVES.find((marker) => marker.toLowerCase() === tag);
         const specialToken = H3_MINIMAX_SPECIAL_TOKENS.find(
             (token) => token.toLowerCase() === tag,
         );
@@ -346,15 +336,6 @@ export function tokenizePrompt(value, connectedReferences = []) {
                 ordinal,
                 unresolved: !connected.has(tag),
             });
-        } else if (shot) {
-            const canonical = `[Shot ${Number(shot[1])}]`;
-            parts.push({type:"shot", kind:"shot", text, unresolved:text !== canonical});
-        } else if (language) {
-            parts.push({type:"language", kind:"language", text,
-                unresolved:text !== language});
-        } else if (directive) {
-            parts.push({type:"directive", kind:"directive", text,
-                unresolved:text !== directive});
         } else if (tag.startsWith("<subject")) {
             parts.push({type: "subject", kind: "subject", text, unresolved: false});
         } else if (["<scenetrans>", "<cutoff>", "<|cutoff|>"].includes(tag)) {

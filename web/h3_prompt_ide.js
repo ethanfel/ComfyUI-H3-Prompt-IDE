@@ -8,13 +8,14 @@ import {
     referenceFromInputName,
     tokenizePrompt,
     undoDirection,
-} from "./h3_prompt_ide_core.mjs?v=0.8.18";
+} from "./h3_prompt_ide_core.mjs?v=0.8.19";
 import {
     createPromptCompletionController,
+    promptBracketReplacementQuery,
     promptRetentionReplacementQuery,
     promptTokenReplacementQuery,
-} from "./h3_prompt_completion_core.mjs?v=0.8.18";
-import {repairLegacyWidgetWidth} from "./h3_legacy_widget_width.mjs?v=0.8.18";
+} from "./h3_prompt_completion_core.mjs?v=0.8.19";
+import {repairLegacyWidgetWidth} from "./h3_legacy_widget_width.mjs?v=0.8.19";
 import {
     analyzeH3Prompt,
     effectiveH3Mode,
@@ -22,7 +23,7 @@ import {
     H3_MODES,
     h3ModeLabel,
     insertH3Section,
-} from "./h3_prompt_schema_core.mjs?v=0.8.18";
+} from "./h3_prompt_schema_core.mjs?v=0.8.19";
 
 // Standalone adaptation of the Rich Scene Prompt Editor originally authored
 // for ethanfel/ComfyUI-MiniMaxH3-Contex-Loop. Its rich reference presentation
@@ -129,11 +130,6 @@ function injectStyles() {
       .h3ide-token-section { display:inline; margin:0; padding:0; border:0; border-radius:0;
         color:color-mix(in srgb,var(--h3ide-text) 82%,var(--h3ide-section)); background:none;
         font-weight:650; cursor:text; user-select:text; }
-      .h3ide-token-shot,.h3ide-token-language,.h3ide-token-directive {
-        display:inline; margin:0; padding:0; border:0; border-radius:0; vertical-align:baseline;
-        background:none; font-weight:600; user-select:all; }
-      .h3ide-token-shot,.h3ide-token-directive { color:var(--h3ide-section); }
-      .h3ide-token-language { color:var(--h3ide-speaker); }
       .h3ide-token-flow { color:var(--h3ide-flow); }
       .h3ide-token-speaker { color:var(--h3ide-speaker); }
       .h3ide-token-unresolved { color:var(--h3ide-danger); border-style:dashed; }
@@ -497,7 +493,7 @@ function mountEditor(node) {
     node.properties ??= {};
 
     const root = element("div", "h3ide-root");
-    root.title = "Standalone rich editor; the output is ordinary text. Start typing or press Ctrl/Cmd+Space after a retention-analysis colon to insert a marker. Ctrl/Cmd-click a retention value such as weak_reference to replace it.";
+    root.title = "Standalone rich editor; the output is ordinary text. Start typing or press Ctrl/Cmd+Space after a retention-analysis colon to insert a marker. Ctrl/Cmd-click a retention value or bracket marker such as [Shot 2] to replace it.";
     for (const eventName of ["pointerdown", "pointerup", "mousedown", "mouseup", "click", "dblclick"]) {
         root.addEventListener(eventName, (event) => event.stopPropagation());
     }
@@ -628,7 +624,7 @@ function mountEditor(node) {
             ? state.records.find((item) => item.kind === part.kind && item.ordinal === part.ordinal)
             : null;
         if (part.unresolved) token.classList.add("h3ide-token-unresolved");
-        if (["section", "shot", "language", "directive"].includes(part.type)) {
+        if (part.type === "section") {
             token.append(element("span", "h3ide-token-label", part.text));
         } else {
             if (record?.preview) {
@@ -1098,7 +1094,7 @@ function mountEditor(node) {
         element("span", "h3ide-spacer"),
         smaller,
         larger,
-        element("span", "h3ide-completion-hint", "Type <, [, (, a section, or a retention marker · Ctrl/Cmd+Space: options · Ctrl/Cmd+click retention: replace"),
+        element("span", "h3ide-completion-hint", "Type <, [, (, a section, or a retention marker · Ctrl/Cmd+Space: options · Ctrl/Cmd+click bracket/retention marker: replace"),
     );
 
     state.tray = element("div", "h3ide-ref-tray");
@@ -1183,7 +1179,9 @@ function mountEditor(node) {
                 text, start, start + String(token.dataset.token ?? "").length,
             );
         } else if (event.ctrlKey || event.metaKey) {
-            query = promptRetentionReplacementQuery(text, pointerTextOffset(state.editor, event));
+            const position = pointerTextOffset(state.editor, event);
+            query = promptBracketReplacementQuery(text, position)
+                ?? promptRetentionReplacementQuery(text, position);
         }
         if (!query) return;
         event.preventDefault();
