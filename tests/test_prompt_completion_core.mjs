@@ -4,7 +4,6 @@ import {
     applyPromptCompletion,
     promptCompletionItems,
     promptCompletionQuery,
-    promptRetentionMarkerRanges,
     promptRetentionReplacementQuery,
     promptTokenReplacementQuery,
 } from "../web/h3_prompt_completion_core.mjs";
@@ -93,14 +92,6 @@ assert.deepEqual(
 );
 const proseMarker = retentionPrompt.lastIndexOf("weak_reference");
 assert.equal(promptRetentionReplacementQuery(retentionPrompt, proseMarker + 4), null);
-assert.deepEqual(
-    promptRetentionMarkerRanges(retentionPrompt).map((range) => range.marker),
-    ["weak_reference", "reference"],
-);
-assert.deepEqual(promptRetentionMarkerRanges(
-    "retention_analysis:\n<Picture 1>: reference - wrong family\n"
-    + "detailed_description:\n[Shot 1] weak_reference is prose.",
-), []);
 
 const visualInsertionPrompt = "retention_analysis:\n<Subject 1>: ";
 const visualInsertionQuery = promptCompletionQuery(

@@ -8,14 +8,13 @@ import {
     referenceFromInputName,
     tokenizePrompt,
     undoDirection,
-} from "./h3_prompt_ide_core.mjs?v=0.8.16";
+} from "./h3_prompt_ide_core.mjs?v=0.8.17";
 import {
     createPromptCompletionController,
-    promptRetentionMarkerRanges,
     promptRetentionReplacementQuery,
     promptTokenReplacementQuery,
-} from "./h3_prompt_completion_core.mjs?v=0.8.16";
-import {repairLegacyWidgetWidth} from "./h3_legacy_widget_width.mjs?v=0.8.16";
+} from "./h3_prompt_completion_core.mjs?v=0.8.17";
+import {repairLegacyWidgetWidth} from "./h3_legacy_widget_width.mjs?v=0.8.17";
 import {
     analyzeH3Prompt,
     effectiveH3Mode,
@@ -23,7 +22,7 @@ import {
     H3_MODES,
     h3ModeLabel,
     insertH3Section,
-} from "./h3_prompt_schema_core.mjs?v=0.8.16";
+} from "./h3_prompt_schema_core.mjs?v=0.8.17";
 
 // Standalone adaptation of the Rich Scene Prompt Editor originally authored
 // for ethanfel/ComfyUI-MiniMaxH3-Contex-Loop. Its rich reference presentation
@@ -136,10 +135,6 @@ function injectStyles() {
       .h3ide-token-thumb { width:16px; height:16px; flex:0 0 16px; object-fit:cover; border-radius:3px;
         background:rgba(255,255,255,.09); }
       .h3ide-token-label { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-      .h3ide-root.h3ide-retention-modifier .h3ide-retention-marker {
-        cursor:pointer; text-decoration-line:underline; text-decoration-style:dotted;
-        text-decoration-color:color-mix(in srgb,var(--h3ide-accent) 85%,currentColor);
-        text-decoration-thickness:1px; text-underline-offset:3px; }
       .h3ide-ref-tray { display:none; max-height:230px; overflow:auto; padding:8px; gap:6px;
         border:1px solid var(--h3ide-border); border-radius:7px; background:var(--h3ide-panel); }
       .h3ide-ref-tray.h3ide-open { display:grid; grid-template-columns:repeat(auto-fill,minmax(180px,1fr)); }
@@ -493,15 +488,6 @@ function mountEditor(node) {
         root.addEventListener(eventName, (event) => event.stopPropagation());
     }
     root.addEventListener("wheel", (event) => event.stopPropagation());
-    const syncRetentionModifier = (event) => root.classList.toggle(
-        "h3ide-retention-modifier", Boolean(event.ctrlKey || event.metaKey),
-    );
-    const clearRetentionModifier = () => root.classList.remove("h3ide-retention-modifier");
-    root.addEventListener("keydown", syncRetentionModifier);
-    root.addEventListener("keyup", syncRetentionModifier);
-    root.addEventListener("pointermove", syncRetentionModifier);
-    root.addEventListener("pointerleave", clearRetentionModifier);
-    globalThis.addEventListener?.("blur", clearRetentionModifier);
 
     const storedMode = H3_MODES.some(
         (item) => !item.contextOnly && item.id === node.properties[MODE_PROPERTY],
@@ -643,30 +629,9 @@ function mountEditor(node) {
         return token;
     }
 
-    function appendRichText(fragment, text, offset, markerRanges) {
-        let cursor = 0;
-        for (const range of markerRanges) {
-            const start = range.start - offset;
-            const end = range.end - offset;
-            if (start < cursor || start < 0 || end > text.length) continue;
-            if (start > cursor) fragment.append(document.createTextNode(text.slice(cursor, start)));
-            const marker = element("span", "h3ide-retention-marker", text.slice(start, end));
-            marker.title = `Ctrl/Cmd-click ${range.marker} to replace it`;
-            fragment.append(marker);
-            cursor = end;
-        }
-        if (cursor < text.length) fragment.append(document.createTextNode(text.slice(cursor)));
-    }
-
     function renderText(text, caret = null) {
         const fragment = document.createDocumentFragment();
-        const markerRanges = promptRetentionMarkerRanges(text);
-        let offset = 0;
-        for (const part of tokenizePrompt(text, state.records)) {
-            if (part.type === "text") appendRichText(fragment, part.text, offset, markerRanges);
-            else fragment.append(makeToken(part));
-            offset += part.text.length;
-        }
+        for (const part of tokenizePrompt(text, state.records)) fragment.append(makeToken(part));
         state.editor.replaceChildren(fragment);
         if (caret != null) restoreCaret(state.editor, caret);
         updateFooter();
@@ -1186,7 +1151,6 @@ function mountEditor(node) {
     });
     state.editor.addEventListener("click", (event) => {
         const token = event.target?.closest?.(".h3ide-token-replaceable");
-        const retentionMarker = event.target?.closest?.(".h3ide-retention-marker");
         const text = editorPlainText(state.editor);
         let query = null;
         if (token && state.editor.contains(token)) {
@@ -1194,10 +1158,6 @@ function mountEditor(node) {
             query = promptTokenReplacementQuery(
                 text, start, start + String(token.dataset.token ?? "").length,
             );
-        } else if ((event.ctrlKey || event.metaKey) && retentionMarker
-                && state.editor.contains(retentionMarker)) {
-            const start = nodeTextOffset(state.editor, retentionMarker);
-            query = promptRetentionReplacementQuery(text, start + 1);
         } else if (event.ctrlKey || event.metaKey) {
             query = promptRetentionReplacementQuery(text, pointerTextOffset(state.editor, event));
         }
@@ -1237,7 +1197,6 @@ function mountEditor(node) {
     const removed = node.onRemoved;
     node.onRemoved = function () {
         if (state.pollTimer != null) window.clearInterval(state.pollTimer);
-        globalThis.removeEventListener?.("blur", clearRetentionModifier);
         state.completion?.destroy();
         state.completion = null;
         return removed?.apply(this, arguments);
