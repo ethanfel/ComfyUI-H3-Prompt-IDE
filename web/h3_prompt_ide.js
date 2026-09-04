@@ -8,13 +8,13 @@ import {
     referenceFromInputName,
     tokenizePrompt,
     undoDirection,
-} from "./h3_prompt_ide_core.mjs?v=0.8.17";
+} from "./h3_prompt_ide_core.mjs?v=0.8.18";
 import {
     createPromptCompletionController,
     promptRetentionReplacementQuery,
     promptTokenReplacementQuery,
-} from "./h3_prompt_completion_core.mjs?v=0.8.17";
-import {repairLegacyWidgetWidth} from "./h3_legacy_widget_width.mjs?v=0.8.17";
+} from "./h3_prompt_completion_core.mjs?v=0.8.18";
+import {repairLegacyWidgetWidth} from "./h3_legacy_widget_width.mjs?v=0.8.18";
 import {
     analyzeH3Prompt,
     effectiveH3Mode,
@@ -22,7 +22,7 @@ import {
     H3_MODES,
     h3ModeLabel,
     insertH3Section,
-} from "./h3_prompt_schema_core.mjs?v=0.8.17";
+} from "./h3_prompt_schema_core.mjs?v=0.8.18";
 
 // Standalone adaptation of the Rich Scene Prompt Editor originally authored
 // for ethanfel/ComfyUI-MiniMaxH3-Contex-Loop. Its rich reference presentation
@@ -129,6 +129,11 @@ function injectStyles() {
       .h3ide-token-section { display:inline; margin:0; padding:0; border:0; border-radius:0;
         color:color-mix(in srgb,var(--h3ide-text) 82%,var(--h3ide-section)); background:none;
         font-weight:650; cursor:text; user-select:text; }
+      .h3ide-token-shot,.h3ide-token-language,.h3ide-token-directive {
+        display:inline; margin:0; padding:0; border:0; border-radius:0; vertical-align:baseline;
+        background:none; font-weight:600; user-select:all; }
+      .h3ide-token-shot,.h3ide-token-directive { color:var(--h3ide-section); }
+      .h3ide-token-language { color:var(--h3ide-speaker); }
       .h3ide-token-flow { color:var(--h3ide-flow); }
       .h3ide-token-speaker { color:var(--h3ide-speaker); }
       .h3ide-token-unresolved { color:var(--h3ide-danger); border-style:dashed; }
@@ -402,19 +407,16 @@ function pointerTextOffset(editor, event) {
     return editorPlainText(range.cloneContents(), {trimFinalNewline:false}).length;
 }
 
-function restoreCaret(editor, requested) {
+function textPoint(editor, requested) {
     const target = Math.max(0, Number(requested) || 0);
-    const range = document.createRange();
-    const selection = globalThis.getSelection?.();
     let consumed = 0;
-    let placed = false;
+    let point = null;
     function visit(node) {
-        if (placed) return;
+        if (point) return;
         if (node.nodeType === Node.TEXT_NODE) {
             const length = node.textContent?.length ?? 0;
             if (target <= consumed + length) {
-                range.setStart(node, Math.max(0, target - consumed));
-                placed = true;
+                point = {node, offset:Math.max(0, target - consumed)};
                 return;
             }
             consumed += length;
@@ -424,9 +426,12 @@ function restoreCaret(editor, requested) {
         if (node.classList?.contains("h3ide-token")) {
             const length = String(node.dataset.token ?? "").length;
             if (target <= consumed + length) {
-                if (target <= consumed) range.setStartBefore(node);
-                else range.setStartAfter(node);
-                placed = true;
+                const siblings = [...(node.parentNode?.childNodes ?? [])];
+                const index = Math.max(0, siblings.indexOf(node));
+                point = {
+                    node:node.parentNode ?? editor,
+                    offset:index + (target <= consumed ? 0 : 1),
+                };
                 return;
             }
             consumed += length;
@@ -435,10 +440,22 @@ function restoreCaret(editor, requested) {
         for (const child of node.childNodes) visit(child);
     }
     visit(editor);
-    if (!placed) range.selectNodeContents(editor), range.collapse(false);
-    else range.collapse(true);
+    return point ?? {node:editor, offset:editor.childNodes.length};
+}
+
+function restoreSelection(editor, requestedStart, requestedEnd = requestedStart) {
+    const start = textPoint(editor, requestedStart);
+    const end = textPoint(editor, Math.max(Number(requestedStart) || 0, Number(requestedEnd) || 0));
+    const range = document.createRange();
+    const selection = globalThis.getSelection?.();
+    range.setStart(start.node, start.offset);
+    range.setEnd(end.node, end.offset);
     selection?.removeAllRanges();
     selection?.addRange(range);
+}
+
+function restoreCaret(editor, requested) {
+    restoreSelection(editor, requested, requested);
 }
 
 function insertPlainText(editor, text) {
@@ -536,16 +553,18 @@ function mountEditor(node) {
         return state.editor ? editorPlainText(state.editor) : state.lastWidgetValue;
     }
 
-    function focusCurrentEditor(caret = null) {
+    function focusCurrentEditor(caret = null, selectionEnd = caret) {
         if (!state.richText && state.plainEditor) {
             const position = caret == null ? state.plainEditor.value.length
                 : Math.max(0, Math.min(state.plainEditor.value.length, Number(caret) || 0));
+            const end = selectionEnd == null ? position
+                : Math.max(position, Math.min(state.plainEditor.value.length, Number(selectionEnd) || 0));
             state.plainEditor.focus();
-            state.plainEditor.setSelectionRange(position, position);
+            state.plainEditor.setSelectionRange(position, end);
             return;
         }
         state.editor?.focus();
-        if (state.editor && caret != null) restoreCaret(state.editor, caret);
+        if (state.editor && caret != null) restoreSelection(state.editor, caret, selectionEnd);
     }
 
     function selectedCurrentText() {
@@ -609,7 +628,7 @@ function mountEditor(node) {
             ? state.records.find((item) => item.kind === part.kind && item.ordinal === part.ordinal)
             : null;
         if (part.unresolved) token.classList.add("h3ide-token-unresolved");
-        if (part.type === "section") {
+        if (["section", "shot", "language", "directive"].includes(part.type)) {
             token.append(element("span", "h3ide-token-label", part.text));
         } else {
             if (record?.preview) {
@@ -1147,7 +1166,12 @@ function mountEditor(node) {
         getCaret:() => selectionTextOffset(state.editor),
         getRecords:() => state.records,
         getMode:() => state.mode,
-        replaceText:(result) => replaceEditorText(result.text, result.caret, "H3 completion inserted"),
+        replaceText:(result) => {
+            replaceEditorText(result.text, result.caret, "H3 completion inserted");
+            if (result.selectionStart != null && result.selectionEnd != null) {
+                focusCurrentEditor(result.selectionStart, result.selectionEnd);
+            }
+        },
     });
     state.editor.addEventListener("click", (event) => {
         const token = event.target?.closest?.(".h3ide-token-replaceable");

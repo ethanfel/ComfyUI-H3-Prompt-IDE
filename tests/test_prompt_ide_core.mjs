@@ -200,18 +200,33 @@ assert.equal(parts.filter((part) => part.type === "dialogue").length, 2);
 assert.deepEqual(tokenizePrompt("Use @hero", [1]), [{type:"text", text:"Use @hero"}]);
 
 const retentionSyntax = tokenizePrompt(
-    "retention_analysis:\n<Subject 1>: weak_reference - broad similarity only.",
+    "retention_analysis:\n<Subject 1> (appears in [Shot 1]): weak_reference - broad similarity only.",
 );
 assert.equal(retentionSyntax.some((part) => part.kind === "retention"), false);
 assert.ok(retentionSyntax.some((part) => part.type === "text"
     && part.text.includes("weak_reference")));
+assert.deepEqual(
+    retentionSyntax.filter((part) => part.type === "shot").map((part) => part.text),
+    ["[Shot 1]"],
+);
+
+const bracketSyntax = tokenizePrompt(
+    "[reference generation] <Subject 1> appears in [Shot 1]. <d>[English] Hi</d>",
+);
+assert.deepEqual(
+    bracketSyntax.filter((part) => part.type !== "text").map((part) => part.type),
+    ["directive", "subject", "shot", "dialogue", "language", "dialogue"],
+);
+assert.deepEqual(tokenizePrompt("Use [ordinary note] here"), [
+    {type:"text", text:"Use [ordinary note] here"},
+]);
 
 const h3Syntax = tokenizePrompt(
     "subject_definitions:\n<Subject 1> (S1) says <d>[English] Hi<scenetrans> there<|cutoff|></d>",
     [],
 ).filter((part) => part.type !== "text");
 assert.deepEqual(h3Syntax.map((part) => part.type), [
-    "section", "subject", "speaker", "dialogue", "flow", "flow", "dialogue",
+    "section", "subject", "speaker", "dialogue", "language", "flow", "flow", "dialogue",
 ]);
 
 const specialSyntax = tokenizePrompt(H3_MINIMAX_SPECIAL_TOKENS.join(" "))
@@ -255,6 +270,8 @@ assert.match(source, /state\.richText \? "Rich text" : "Plain text"/);
 assert.match(source, /Disable rich text and show the base prompt/);
 assert.match(source, /h3ide-token-label/);
 assert.match(source, /h3ide-token-replaceable/);
+assert.match(source, /h3ide-token-shot/);
+assert.match(source, /\["section", "shot", "language", "directive"\]/);
 assert.match(source, /state\.completion\?\.open\(query\)/);
 assert.match(source, /event\.ctrlKey \|\| event\.metaKey/);
 assert.match(source, /promptRetentionReplacementQuery/);
@@ -262,11 +279,15 @@ assert.match(source, /Ctrl\/Cmd-click a retention value such as weak_reference t
 assert.match(source, /Start typing or press Ctrl\/Cmd\+Space after a retention-analysis colon/);
 assert.match(source, /caretPositionFromPoint/);
 assert.match(source, /caretRangeFromPoint/);
+assert.match(source, /function restoreSelection/);
+assert.match(source, /focusCurrentEditor\(result\.selectionStart, result\.selectionEnd\)/);
 assert.doesNotMatch(source, /h3ide-token-retention/);
 assert.match(source, /editorPlainText\(range\.cloneContents\(\), \{trimFinalNewline:false\}\)/);
-const focusEditorBody = source.match(/function focusCurrentEditor\(caret = null\) \{([\s\S]*?)\n    \}/)?.[1] ?? "";
+const focusEditorBody = source.match(
+    /function focusCurrentEditor\(caret = null, selectionEnd = caret\) \{([\s\S]*?)\n    \}/,
+)?.[1] ?? "";
 assert.ok(focusEditorBody.indexOf("state.editor?.focus()")
-    < focusEditorBody.indexOf("restoreCaret(state.editor, caret)"));
+    < focusEditorBody.indexOf("restoreSelection(state.editor, caret, selectionEnd)"));
 assert.doesNotMatch(focusEditorBody, /renderText/);
 assert.match(source, /Type <, \[, \(, a section, or a retention marker/);
 assert.match(source, /const caret = selectionTextOffset\(state\.editor\);\s+renderText\(editorPlainText\(state\.editor\), caret\);/);

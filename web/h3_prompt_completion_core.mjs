@@ -1,18 +1,15 @@
 import {
     H3_ALL_SECTIONS,
     H3_AUDIO_RETENTION_MARKERS,
+    H3_LANGUAGE_MARKERS,
     H3_MINIMAX_SPECIAL_TOKENS,
     H3_TASK_DIRECTIVES,
     H3_VISUAL_RETENTION_MARKERS,
     effectiveH3Mode,
     h3SectionsForMode,
-} from "./h3_prompt_schema_core.mjs?v=0.8.17";
+} from "./h3_prompt_schema_core.mjs?v=0.8.18";
 
-export const H3_LANGUAGE_MARKERS = Object.freeze([
-    "[English]", "[French]", "[Spanish]", "[German]", "[Italian]",
-    "[Portuguese]", "[Chinese]", "[Japanese]", "[Korean]", "[Arabic]",
-    "[unclear]",
-]);
+export {H3_LANGUAGE_MARKERS};
 
 const [
     DIALOGUE_START,
@@ -59,6 +56,18 @@ export function promptTokenReplacementQuery(value, requestedStart, requestedEnd)
             query:reference?.[1] ?? angle[1], manual:false, replacement:true,
             allowDelete:true};
     }
+    if (/^\[Shot\s+\d+\]$/i.test(typed)) {
+        return {trigger:"shot", start, end, typed, query:"", manual:false,
+            replacement:true, allowDelete:true};
+    }
+    if (H3_LANGUAGE_MARKERS.some((marker) => marker.toLowerCase() === typed.toLowerCase())) {
+        return {trigger:"language", start, end, typed, query:"", manual:false,
+            replacement:true, allowDelete:true};
+    }
+    if (H3_TASK_DIRECTIVES.some((directive) => directive.toLowerCase() === typed.toLowerCase())) {
+        return {trigger:"directive", start, end, typed, query:"", manual:false,
+            replacement:true, allowDelete:true};
+    }
     if (/^\(S\d+(?:,S\d+)*\)$/i.test(typed)) {
         return {trigger:"(", start, end, typed, query:"S", manual:false,
             replacement:true, allowDelete:true};
@@ -85,6 +94,26 @@ function retentionLineContext(text, position) {
 
 function retentionFamily(referenceKind) {
     return String(referenceKind).toLowerCase() === "audio" ? "audio" : "visual";
+}
+
+function promptTimestampQuery(text, position, {manual = false} = {}) {
+    if (activeSectionAt(text, position) !== "detailed_description") return null;
+    const lineStart = text.lastIndexOf("\n", Math.max(0, position - 1)) + 1;
+    const before = text.slice(lineStart, position);
+    const match = before.match(/(?:^|\s)(At)([ \t]*)$/i);
+    if (!match) return null;
+    const prefix = before.slice(0, before.length - match[1].length - match[2].length);
+    const shot = prefix.match(/\[Shot\s+(\d+)\]\s*$/i);
+    const followsLaterShot = Number(shot?.[1]) >= 2;
+    if (!manual && !followsLaterShot) return null;
+    return {
+        trigger:"timestamp",
+        start:position - match[1].length - match[2].length,
+        end:position,
+        typed:match[1],
+        query:"",
+        manual,
+    };
 }
 
 function promptRetentionInsertionQuery(text, position, {manual = false} = {}) {
@@ -154,6 +183,8 @@ export function promptCompletionQuery(value, caret, {manual = false} = {}) {
     }
     const retention = promptRetentionInsertionQuery(text, position, {manual});
     if (retention) return retention;
+    const timestamp = promptTimestampQuery(text, position, {manual});
+    if (timestamp) return timestamp;
     const section = before.match(/(?:^|\n)([A-Za-z_][A-Za-z_]*)$/);
     if (section && H3_ALL_SECTIONS.some((item) => item.startsWith(section[1].toLowerCase()))) {
         const typed = section[1];
@@ -281,6 +312,18 @@ function retentionItems(family) {
     }));
 }
 
+function timestampItems() {
+    return [{
+        kind:"timestamp",
+        label:"At MM:SS.mmm,",
+        insertText:"At 00:00.000, ",
+        selectionStartOffset:3,
+        selectionEndOffset:12,
+        detail:"H3 millisecond timestamp; type over the selected value",
+        priority:0,
+    }];
+}
+
 function sectionItems(text, mode) {
     const effective = effectiveH3Mode(text, mode);
     return h3SectionsForMode(effective).map((section, index) => ({
@@ -303,9 +346,13 @@ export function promptCompletionItems(query, records = [], {text = "", mode = "a
     let items;
     if (query.trigger === "<") items = referenceItems(records);
     else if (query.trigger === "[") items = bracketItems();
+    else if (["shot", "language", "directive"].includes(query.trigger)) {
+        items = bracketItems().filter((item) => item.kind === query.trigger);
+    }
     else if (query.trigger === "(") items = speakerItems();
     else if (query.trigger === "retention_visual") items = retentionItems("visual");
     else if (query.trigger === "retention_audio") items = retentionItems("audio");
+    else if (query.trigger === "timestamp") items = timestampItems();
     else if (query.trigger === "section") items = sectionItems(text, mode);
     else items = [...referenceItems(records), ...bracketItems(), ...speakerItems(), ...sectionItems(text, mode)];
     const result = unique(items).map((item) => ({item, score:score(item, query.query)}))
@@ -348,7 +395,18 @@ export function applyPromptCompletion(value, query, item) {
         : Math.max(0, Math.min(insertText.length, Number(item.caretOffset) || 0));
     const spacingOffset = relative === insertText.length
         ? addedText.length + existingText + addedSpace.length + existingSpace : 0;
-    return {text:result, caret:before.length + relative + spacingOffset};
+    const completion = {text:result, caret:before.length + relative + spacingOffset};
+    if (item.selectionStartOffset != null && item.selectionEndOffset != null) {
+        const selectionStart = Math.max(0, Math.min(
+            insertText.length, Number(item.selectionStartOffset) || 0,
+        ));
+        const selectionEnd = Math.max(selectionStart, Math.min(
+            insertText.length, Number(item.selectionEndOffset) || 0,
+        ));
+        completion.selectionStart = before.length + selectionStart;
+        completion.selectionEnd = before.length + selectionEnd;
+    }
+    return completion;
 }
 
 function injectStyles() {

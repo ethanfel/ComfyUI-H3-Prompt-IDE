@@ -62,6 +62,60 @@ assert.deepEqual(applyPromptCompletion(
 ), {text:"Use here", caret:3});
 assert.equal(promptTokenReplacementQuery("(S2)", 0, 4).query, "S");
 assert.equal(promptTokenReplacementQuery("subject_definitions:", 0, 20), null);
+const shotQuery = promptTokenReplacementQuery("[Shot 2]", 0, 8);
+assert.equal(shotQuery.trigger, "shot");
+assert.deepEqual(
+    promptCompletionItems(shotQuery).map((item) => item.label),
+    [...Array.from({length:12}, (_, index) => `[Shot ${index + 1}]`), "Delete [Shot 2]"],
+);
+const shotReplacement = promptCompletionItems(shotQuery)
+    .find((item) => item.label === "[Shot 3]");
+const inSentenceShot = "Appears in [Shot 2] and [Shot 4]";
+const sentenceShotStart = inSentenceShot.indexOf("[Shot 2]");
+const sentenceShotQuery = promptTokenReplacementQuery(
+    inSentenceShot, sentenceShotStart, sentenceShotStart + "[Shot 2]".length,
+);
+assert.equal(applyPromptCompletion(
+    inSentenceShot, sentenceShotQuery, shotReplacement,
+).text, "Appears in [Shot 3] and [Shot 4]");
+const languageQuery = promptTokenReplacementQuery("[English]", 0, 9);
+assert.equal(languageQuery.trigger, "language");
+assert.ok(promptCompletionItems(languageQuery).some((item) => item.label === "[French]"));
+const directiveQuery = promptTokenReplacementQuery("[reference generation]", 0, 22);
+assert.equal(directiveQuery.trigger, "directive");
+assert.ok(promptCompletionItems(directiveQuery)
+    .some((item) => item.label === "[video editing]"));
+assert.equal(promptTokenReplacementQuery("[ordinary note]", 0, 15), null);
+
+const automaticTimestampPrompt = "detailed_description:\n[Shot 2] At";
+const automaticTimestampQuery = promptCompletionQuery(
+    automaticTimestampPrompt, automaticTimestampPrompt.length,
+);
+assert.equal(automaticTimestampQuery.trigger, "timestamp");
+const timestampItem = promptCompletionItems(automaticTimestampQuery)[0];
+assert.equal(timestampItem.label, "At MM:SS.mmm,");
+assert.deepEqual(
+    applyPromptCompletion(automaticTimestampPrompt, automaticTimestampQuery, timestampItem),
+    {
+        text:"detailed_description:\n[Shot 2] At 00:00.000, ",
+        caret:"detailed_description:\n[Shot 2] At 00:00.000, ".length,
+        selectionStart:"detailed_description:\n[Shot 2] At ".length,
+        selectionEnd:"detailed_description:\n[Shot 2] At 00:00.000".length,
+    },
+);
+const firstShotTimestamp = "detailed_description:\n[Shot 1] At";
+assert.equal(promptCompletionQuery(firstShotTimestamp, firstShotTimestamp.length), null);
+const manualTimestampPrompt = "detailed_description:\nAt";
+assert.equal(promptCompletionQuery(
+    manualTimestampPrompt, manualTimestampPrompt.length,
+), null);
+assert.equal(promptCompletionQuery(
+    manualTimestampPrompt, manualTimestampPrompt.length, {manual:true},
+).trigger, "timestamp");
+const outsideTimestampSection = "summary:\nAt";
+assert.equal(promptCompletionQuery(
+    outsideTimestampSection, outsideTimestampSection.length, {manual:true},
+).trigger, "manual");
 
 const retentionPrompt = `subject_definitions:
 <Subject 1> is a baker.

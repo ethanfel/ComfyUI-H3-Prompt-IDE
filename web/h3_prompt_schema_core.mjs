@@ -69,6 +69,12 @@ export const H3_TASK_DIRECTIVES = Object.freeze([
     "[video continuation + reference generation + audio reuse]",
 ]);
 
+export const H3_LANGUAGE_MARKERS = Object.freeze([
+    "[English]", "[French]", "[Spanish]", "[German]", "[Italian]",
+    "[Portuguese]", "[Chinese]", "[Japanese]", "[Korean]", "[Arabic]",
+    "[unclear]",
+]);
+
 export const H3_VISUAL_RETENTION_MARKERS = Object.freeze([
     "fully_preserved",
     "partially_preserved",
