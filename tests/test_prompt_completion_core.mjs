@@ -23,6 +23,19 @@ const records = [
 
 assert.equal(promptCompletionQuery("Use @hero", 9), null);
 assert.equal(promptCompletionQuery("Use <Pic", 8).trigger, "<");
+const optionalSpaceQuery = promptCompletionQuery("Use <Pic", 8);
+const optionalSpaceItem = promptCompletionItems(optionalSpaceQuery, records)
+    .find((item) => item.label === "<Picture 1>");
+assert.equal(
+    applyPromptCompletion("Use <Pic", optionalSpaceQuery, optionalSpaceItem).text,
+    "Use <Picture 1> ",
+);
+assert.equal(
+    applyPromptCompletion("Use <Pic", optionalSpaceQuery, optionalSpaceItem, {
+        appendSpace:false,
+    }).text,
+    "Use <Picture 1>",
+);
 assert.equal(promptCompletionQuery("Use [key", 8).trigger, "[");
 assert.equal(promptCompletionQuery("Speaker (S", 10).trigger, "(");
 assert.equal(promptCompletionQuery("subject_def", 11).trigger, "section");

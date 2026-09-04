@@ -8,14 +8,18 @@ import {
     referenceFromInputName,
     tokenizePrompt,
     undoDirection,
-} from "./h3_prompt_ide_core.mjs?v=0.8.21";
+} from "./h3_prompt_ide_core.mjs?v=0.8.22";
 import {
     createPromptCompletionController,
     promptBracketReplacementQuery,
     promptRetentionReplacementQuery,
     promptTokenReplacementQuery,
-} from "./h3_prompt_completion_core.mjs?v=0.8.21";
-import {repairLegacyWidgetWidth} from "./h3_legacy_widget_width.mjs?v=0.8.21";
+} from "./h3_prompt_completion_core.mjs?v=0.8.22";
+import {repairLegacyWidgetWidth} from "./h3_legacy_widget_width.mjs?v=0.8.22";
+import {
+    H3_PROMPT_IDE_SETTING_DEFINITIONS,
+    h3PromptIdePreferences,
+} from "./h3_prompt_ide_settings_core.mjs?v=0.8.22";
 import {
     analyzeH3Prompt,
     effectiveH3Mode,
@@ -23,7 +27,7 @@ import {
     H3_MODES,
     h3ModeLabel,
     insertH3Section,
-} from "./h3_prompt_schema_core.mjs?v=0.8.21";
+} from "./h3_prompt_schema_core.mjs?v=0.8.22";
 
 // Standalone adaptation of the Rich Scene Prompt Editor originally authored
 // for ethanfel/ComfyUI-MiniMaxH3-Contex-Loop. Its rich reference presentation
@@ -43,6 +47,32 @@ const TASK_TEMPLATE_PROPERTY = "h3_prompt_ide_last_task_template";
 const DEFAULT_FONT = 17;
 const MIN_FONT = 12;
 const MAX_FONT = 32;
+const SUPPORTS_DECLARATIVE_SETTINGS = typeof app.extensionManager?.setting?.get === "function";
+
+function settingValue(id, fallback) {
+    if (SUPPORTS_DECLARATIVE_SETTINGS) {
+        const value = app.extensionManager.setting.get(id);
+        if (value !== undefined) return value;
+    }
+    return app.ui?.settings?.getSettingValue?.(id, fallback) ?? fallback;
+}
+
+function promptIdePreferences() {
+    return h3PromptIdePreferences(settingValue);
+}
+
+function refreshPromptIdeSettings() {
+    for (const node of app.graph?._nodes ?? []) node._h3PromptIdeSettingsChanged?.();
+}
+
+const PROMPT_IDE_SETTINGS = H3_PROMPT_IDE_SETTING_DEFINITIONS.map((definition) => ({
+    ...definition,
+    category:[...definition.category],
+    options:definition.options?.map((option) => typeof option === "object" ? {...option} : option),
+    onChange() {
+        refreshPromptIdeSettings();
+    },
+}));
 
 const ICONS = Object.freeze({
     picture: '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="8.5" cy="9" r="1.5"/><path d="m5 17 4.5-4.5 3.2 3.2 2.3-2.3 4 3.6"/></svg>',
@@ -518,6 +548,10 @@ function mountEditor(node) {
     const storedMode = H3_MODES.some(
         (item) => !item.contextOnly && item.id === node.properties[MODE_PROPERTY],
     ) ? node.properties[MODE_PROPERTY] : "auto";
+    const hasRichTextOverride = Object.prototype.hasOwnProperty.call(
+        node.properties, RICH_TEXT_PROPERTY,
+    );
+    const initialPreferences = promptIdePreferences();
 
     const state = {
         editor:null,
@@ -526,6 +560,7 @@ function mountEditor(node) {
         structure:null,
         counts:null,
         status:null,
+        completionHint:null,
         records:[],
         signature:"",
         lastWidgetValue:String(promptWidget.value ?? ""),
@@ -541,7 +576,9 @@ function mountEditor(node) {
         lastTaskTemplate:String(node.properties[TASK_TEMPLATE_PROPERTY] ?? ""),
         duration:Math.max(0.01, Number(node.properties[DURATION_PROPERTY]) || 6),
         finalShot:Math.max(1, Math.min(99, Math.trunc(Number(node.properties[FINAL_SHOT_PROPERTY]) || 1))),
-        richText:node.properties[RICH_TEXT_PROPERTY] !== false,
+        richText:hasRichTextOverride
+            ? node.properties[RICH_TEXT_PROPERTY] !== false
+            : initialPreferences.defaultRichText,
         analysis:null,
         completion:null,
         pollTimer:null,
@@ -551,6 +588,24 @@ function mountEditor(node) {
     let presentationButton;
     let modeSelect;
     let templateButton;
+
+    function updateInteractionHelp() {
+        const preferences = promptIdePreferences();
+        const suggestionHelp = preferences.automaticSuggestions
+            ? "Suggestions appear while typing; Ctrl/Cmd+Space opens all options."
+            : "Automatic suggestions are disabled; Ctrl/Cmd+Space opens options.";
+        const replacementHelp = preferences.markerReplacement
+            ? "Click styled tokens or Ctrl/Cmd-click unstyled bracket and retention markers to replace them."
+            : "Marker replacement interactions are disabled in ComfyUI Settings.";
+        root.title = `Standalone rich editor; the output is ordinary text. ${suggestionHelp} ${replacementHelp}`;
+        if (state.completionHint) {
+            state.completionHint.textContent = preferences.markerReplacement
+                ? "Type <, [, (, a section, or a retention marker · Ctrl/Cmd+Space: options · Ctrl/Cmd+click bracket/retention marker: replace"
+                : "Type <, [, (, a section, or a retention marker · Ctrl/Cmd+Space: options · marker replacement disabled in Settings";
+        }
+    }
+
+    updateInteractionHelp();
 
     function dirty() {
         node.graph?.setDirtyCanvas?.(true, true);
@@ -584,13 +639,13 @@ function mountEditor(node) {
         return selectedPlainText(state.editor);
     }
 
-    function setRichText(enabled, {focus = true} = {}) {
+    function setRichText(enabled, {focus = true, persist = true} = {}) {
         const value = currentText();
         const caret = state.richText
             ? selectionTextOffset(state.editor)
             : state.plainEditor?.selectionStart ?? value.length;
         state.richText = Boolean(enabled);
-        node.properties[RICH_TEXT_PROPERTY] = state.richText;
+        if (persist) node.properties[RICH_TEXT_PROPERTY] = state.richText;
         shell?.classList.toggle("h3ide-plain", !state.richText);
         if (state.plainEditor) state.plainEditor.value = value;
         if (state.richText && state.editor) renderText(value, caret);
@@ -603,7 +658,7 @@ function mountEditor(node) {
         }
         updateFooter(state.richText ? "Rich text enabled" : "Showing base prompt");
         if (focus) focusCurrentEditor(caret);
-        dirty();
+        if (persist) dirty();
     }
 
     function updateFooter(message = "Plain STRING ready") {
@@ -631,7 +686,8 @@ function mountEditor(node) {
         const token = element("span", `h3ide-token h3ide-token-${part.kind}`);
         token.contentEditable = "false";
         token.dataset.token = part.text;
-        const replaceable = Boolean(promptTokenReplacementQuery(part.text, 0, part.text.length));
+        const replaceable = promptIdePreferences().markerReplacement
+            && Boolean(promptTokenReplacementQuery(part.text, 0, part.text.length));
         if (replaceable) token.classList.add("h3ide-token-replaceable");
         const record = part.type === "reference"
             ? state.records.find((item) => item.kind === part.kind && item.ordinal === part.ordinal)
@@ -1097,6 +1153,7 @@ function mountEditor(node) {
         root.style.setProperty("--h3ide-font-size", `${state.fontSize}px`);
         dirty();
     });
+    state.completionHint = element("span", "h3ide-completion-hint");
     toolbar.append(
         modeSelect,
         templateButton,
@@ -1109,8 +1166,9 @@ function mountEditor(node) {
         element("span", "h3ide-spacer"),
         smaller,
         larger,
-        element("span", "h3ide-completion-hint", "Type <, [, (, a section, or a retention marker · Ctrl/Cmd+Space: options · Ctrl/Cmd+click bracket/retention marker: replace"),
+        state.completionHint,
     );
+    updateInteractionHelp();
 
     state.tray = element("div", "h3ide-ref-tray");
     state.tray.classList.toggle("h3ide-open", state.trayOpen);
@@ -1173,6 +1231,8 @@ function mountEditor(node) {
         getCaret:() => selectionTextOffset(state.editor),
         getRecords:() => state.records,
         getMode:() => state.mode,
+        getAutomaticSuggestions:() => promptIdePreferences().automaticSuggestions,
+        getAppendCompletionSpace:() => promptIdePreferences().appendCompletionSpace,
         replaceText:(result) => {
             replaceEditorText(result.text, result.caret, "H3 completion inserted");
             if (result.selectionStart != null && result.selectionEnd != null) {
@@ -1181,6 +1241,7 @@ function mountEditor(node) {
         },
     });
     state.editor.addEventListener("click", (event) => {
+        if (!promptIdePreferences().markerReplacement) return;
         const token = event.target?.closest?.(".h3ide-token-replaceable");
         const text = editorPlainText(state.editor);
         let query = null;
@@ -1232,7 +1293,23 @@ function mountEditor(node) {
         if (state.pollTimer != null) window.clearInterval(state.pollTimer);
         state.completion?.destroy();
         state.completion = null;
+        delete node._h3PromptIdeSettingsChanged;
         return removed?.apply(this, arguments);
+    };
+    node._h3PromptIdeSettingsChanged = () => {
+        const preferences = promptIdePreferences();
+        state.completion?.hide();
+        const hasOverride = Object.prototype.hasOwnProperty.call(
+            node.properties, RICH_TEXT_PROPERTY,
+        );
+        if (!hasOverride && state.richText !== preferences.defaultRichText) {
+            setRichText(preferences.defaultRichText, {focus:false, persist:false});
+        } else if (state.richText && state.editor) {
+            const caret = document.activeElement === state.editor
+                ? selectionTextOffset(state.editor) : null;
+            renderText(currentText(), caret);
+        }
+        updateInteractionHelp();
     };
     node._h3PromptIdeRefresh = () => {
         repairLegacyWidgetWidth(domWidget);
@@ -1257,6 +1334,15 @@ function mountEditor(node) {
 
 app.registerExtension({
     name:"h3_prompt_ide.standalone_editor",
+    ...(SUPPORTS_DECLARATIVE_SETTINGS ? {settings:PROMPT_IDE_SETTINGS} : {}),
+    setup() {
+        if (!SUPPORTS_DECLARATIVE_SETTINGS) {
+            for (const setting of PROMPT_IDE_SETTINGS) {
+                app.ui?.settings?.addSetting?.(setting);
+            }
+        }
+        refreshPromptIdeSettings();
+    },
     async beforeRegisterNodeDef(nodeTypeDefinition, nodeData) {
         if (nodeData.name === EDITOR_NODE) {
             const created = nodeTypeDefinition.prototype.onNodeCreated;

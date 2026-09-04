@@ -14,6 +14,37 @@ import {
     videoToken,
 } from "../web/h3_prompt_ide_core.mjs";
 import {H3_MINIMAX_SPECIAL_TOKENS} from "../web/h3_prompt_schema_core.mjs";
+import {
+    H3_PROMPT_IDE_SETTING_DEFINITIONS,
+    H3_PROMPT_IDE_SETTING_IDS,
+    h3PromptIdePreferences,
+} from "../web/h3_prompt_ide_settings_core.mjs";
+
+assert.equal(H3_PROMPT_IDE_SETTING_DEFINITIONS.length, 4);
+assert.equal(new Set(H3_PROMPT_IDE_SETTING_DEFINITIONS.map((item) => item.id)).size, 4);
+assert.ok(H3_PROMPT_IDE_SETTING_DEFINITIONS.every(
+    (item) => item.category[0] === "H3 Prompt IDE",
+));
+assert.deepEqual(h3PromptIdePreferences(), {
+    defaultRichText:true,
+    automaticSuggestions:true,
+    appendCompletionSpace:true,
+    markerReplacement:true,
+});
+const disabledPreferences = new Map([
+    [H3_PROMPT_IDE_SETTING_IDS.defaultPresentation, "plain"],
+    [H3_PROMPT_IDE_SETTING_IDS.automaticSuggestions, false],
+    [H3_PROMPT_IDE_SETTING_IDS.appendCompletionSpace, false],
+    [H3_PROMPT_IDE_SETTING_IDS.markerReplacement, false],
+]);
+assert.deepEqual(h3PromptIdePreferences(
+    (id, fallback) => disabledPreferences.has(id) ? disabledPreferences.get(id) : fallback,
+), {
+    defaultRichText:false,
+    automaticSuggestions:false,
+    appendCompletionSpace:false,
+    markerReplacement:false,
+});
 
 assert.equal(pictureToken(1), "<Picture 1>");
 assert.equal(pictureToken(9), "<Picture 9>");
@@ -274,6 +305,12 @@ assert.match(source, /event\.ctrlKey \|\| event\.metaKey/);
 assert.match(source, /promptRetentionReplacementQuery/);
 assert.match(source, /promptBracketReplacementQuery/);
 assert.match(source, /Ctrl\/Cmd-click a retention value or bracket marker such as \[Shot 2\] to replace it/);
+assert.match(source, /H3_PROMPT_IDE_SETTING_DEFINITIONS/);
+assert.match(source, /settings:PROMPT_IDE_SETTINGS/);
+assert.match(source, /settings\?\.addSetting\?\.\(setting\)/);
+assert.match(source, /getAutomaticSuggestions:\(\) => promptIdePreferences\(\)\.automaticSuggestions/);
+assert.match(source, /getAppendCompletionSpace:\(\) => promptIdePreferences\(\)\.appendCompletionSpace/);
+assert.match(source, /if \(!promptIdePreferences\(\)\.markerReplacement\) return/);
 assert.match(source, /\["historyUndo", "historyRedo"\]\.includes\(event\?\.inputType\)/);
 assert.match(source, /undoDirection\(event\) && !isEditableEventTarget\(event\.target\)/);
 const editorKeydownBody = source.match(

@@ -7,7 +7,7 @@ import {
     H3_VISUAL_RETENTION_MARKERS,
     effectiveH3Mode,
     h3SectionsForMode,
-} from "./h3_prompt_schema_core.mjs?v=0.8.21";
+} from "./h3_prompt_schema_core.mjs?v=0.8.22";
 
 export {H3_LANGUAGE_MARKERS};
 
@@ -383,7 +383,7 @@ export function promptCompletionItems(query, records = [], {text = "", mode = "a
     return result;
 }
 
-export function applyPromptCompletion(value, query, item) {
+export function applyPromptCompletion(value, query, item, {appendSpace = true} = {}) {
     const text = String(value ?? "");
     if (!query || !item) return {text, caret:text.length};
     const start = Math.max(0, Math.min(text.length, Number(query.start) || 0));
@@ -402,7 +402,7 @@ export function applyPromptCompletion(value, query, item) {
     const addedText = appendText && !hasAppendedText ? appendText : "";
     const existingText = hasAppendedText ? appendText.length : 0;
     if (addedText) after = after.replace(/^[ \t]+/, "");
-    const wantsSpace = Boolean(!appendText && item.appendSpace && !query.replacement);
+    const wantsSpace = Boolean(appendSpace && !appendText && item.appendSpace && !query.replacement);
     const addedSpace = wantsSpace && !/^\s/.test(after) ? " " : "";
     const existingSpace = wantsSpace && /^[ \t]/.test(after) ? 1 : 0;
     const result = before + insertText + addedText + addedSpace + after;
@@ -462,6 +462,7 @@ function caretAnchor(input) {
 
 export function createPromptCompletionController({
     input, getText, getCaret, getRecords = () => [], getMode = () => "auto",
+    getAutomaticSuggestions = () => true, getAppendCompletionSpace = () => true,
     replaceText, maxItems = 80,
 } = {}) {
     if (!input || typeof replaceText !== "function") return null;
@@ -510,7 +511,9 @@ export function createPromptCompletionController({
     function accept(index = selected) {
         const item = currentItems[index];
         if (!item || !currentQuery) return false;
-        const result = applyPromptCompletion(getText(), currentQuery, item);
+        const result = applyPromptCompletion(getText(), currentQuery, item, {
+            appendSpace:getAppendCompletionSpace(),
+        });
         hide();
         input.focus();
         replaceText(result, item);
@@ -556,6 +559,10 @@ export function createPromptCompletionController({
     }
 
     function refresh({manual = false} = {}) {
+        if (!manual && !getAutomaticSuggestions()) {
+            hide();
+            return false;
+        }
         const text = String(getText?.() ?? "");
         return show(promptCompletionQuery(text, getCaret?.(), {manual}));
     }
