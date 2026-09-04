@@ -107,12 +107,15 @@ assert.deepEqual(
     {
         text:"detailed_description:\n[Shot 2] At 00:00.000, ",
         caret:"detailed_description:\n[Shot 2] At 00:00.000, ".length,
-        selectionStart:"detailed_description:\n[Shot 2] At ".length,
+        selectionStart:"detailed_description:\n[Shot 2] At 00:".length,
         selectionEnd:"detailed_description:\n[Shot 2] At 00:00.000".length,
     },
 );
 const firstShotTimestamp = "detailed_description:\n[Shot 1] At";
-assert.equal(promptCompletionQuery(firstShotTimestamp, firstShotTimestamp.length), null);
+assert.equal(
+    promptCompletionQuery(firstShotTimestamp, firstShotTimestamp.length).trigger,
+    "timestamp",
+);
 const manualTimestampPrompt = "detailed_description:\nAt";
 assert.equal(promptCompletionQuery(
     manualTimestampPrompt, manualTimestampPrompt.length,

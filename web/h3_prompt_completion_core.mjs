@@ -7,7 +7,7 @@ import {
     H3_VISUAL_RETENTION_MARKERS,
     effectiveH3Mode,
     h3SectionsForMode,
-} from "./h3_prompt_schema_core.mjs?v=0.8.19";
+} from "./h3_prompt_schema_core.mjs?v=0.8.20";
 
 export {H3_LANGUAGE_MARKERS};
 
@@ -119,8 +119,8 @@ function promptTimestampQuery(text, position, {manual = false} = {}) {
     if (!match) return null;
     const prefix = before.slice(0, before.length - match[1].length - match[2].length);
     const shot = prefix.match(/\[Shot\s+(\d+)\]\s*$/i);
-    const followsLaterShot = Number(shot?.[1]) >= 2;
-    if (!manual && !followsLaterShot) return null;
+    const followsShot = Number(shot?.[1]) >= 1;
+    if (!manual && !followsShot) return null;
     return {
         trigger:"timestamp",
         start:position - match[1].length - match[2].length,
@@ -332,9 +332,9 @@ function timestampItems() {
         kind:"timestamp",
         label:"At MM:SS.mmm,",
         insertText:"At 00:00.000, ",
-        selectionStartOffset:3,
+        selectionStartOffset:6,
         selectionEndOffset:12,
-        detail:"H3 millisecond timestamp; type over the selected value",
+        detail:"H3 millisecond timestamp; type over the selected SS.mmm value",
         priority:0,
     }];
 }

@@ -1,6 +1,6 @@
 [project]
 name = "h3-prompt-ide"
-version = "0.8.19"
+version = "0.8.20"
 description = "VS Code-inspired MiniMax H3 prompt editor and reference media palette for ComfyUI"
 readme = "README.md"
 requires-python = ">=3.10"
