@@ -274,6 +274,13 @@ assert.match(source, /event\.ctrlKey \|\| event\.metaKey/);
 assert.match(source, /promptRetentionReplacementQuery/);
 assert.match(source, /promptBracketReplacementQuery/);
 assert.match(source, /Ctrl\/Cmd-click a retention value or bracket marker such as \[Shot 2\] to replace it/);
+assert.match(source, /\["historyUndo", "historyRedo"\]\.includes\(event\?\.inputType\)/);
+assert.match(source, /undoDirection\(event\) && !isEditableEventTarget\(event\.target\)/);
+const editorKeydownBody = source.match(
+    /state\.editor\.addEventListener\("keydown", \(event\) => \{([\s\S]*?)\n    \}\);/,
+)?.[1] ?? "";
+assert.doesNotMatch(editorKeydownBody, /applyHistory/);
+assert.doesNotMatch(editorKeydownBody, /preventDefault\(\).*undo|undo.*preventDefault\(\)/s);
 assert.match(source, /Start typing or press Ctrl\/Cmd\+Space after a retention-analysis colon/);
 assert.match(source, /caretPositionFromPoint/);
 assert.match(source, /caretRangeFromPoint/);

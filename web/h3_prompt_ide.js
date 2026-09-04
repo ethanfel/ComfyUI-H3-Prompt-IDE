@@ -8,14 +8,14 @@ import {
     referenceFromInputName,
     tokenizePrompt,
     undoDirection,
-} from "./h3_prompt_ide_core.mjs?v=0.8.20";
+} from "./h3_prompt_ide_core.mjs?v=0.8.21";
 import {
     createPromptCompletionController,
     promptBracketReplacementQuery,
     promptRetentionReplacementQuery,
     promptTokenReplacementQuery,
-} from "./h3_prompt_completion_core.mjs?v=0.8.20";
-import {repairLegacyWidgetWidth} from "./h3_legacy_widget_width.mjs?v=0.8.20";
+} from "./h3_prompt_completion_core.mjs?v=0.8.21";
+import {repairLegacyWidgetWidth} from "./h3_legacy_widget_width.mjs?v=0.8.21";
 import {
     analyzeH3Prompt,
     effectiveH3Mode,
@@ -23,7 +23,7 @@ import {
     H3_MODES,
     h3ModeLabel,
     insertH3Section,
-} from "./h3_prompt_schema_core.mjs?v=0.8.20";
+} from "./h3_prompt_schema_core.mjs?v=0.8.21";
 
 // Standalone adaptation of the Rich Scene Prompt Editor originally authored
 // for ethanfel/ComfyUI-MiniMaxH3-Contex-Loop. Its rich reference presentation
@@ -198,6 +198,11 @@ function button(label, title, action, iconKind = null) {
     item.addEventListener("pointerdown", (event) => event.preventDefault());
     item.addEventListener("click", action);
     return item;
+}
+
+function isEditableEventTarget(target) {
+    const item = target?.nodeType === Node.TEXT_NODE ? target.parentElement : target;
+    return Boolean(item?.closest?.("input, textarea, [contenteditable='true']"));
 }
 
 function nodeType(node) {
@@ -497,7 +502,15 @@ function mountEditor(node) {
     for (const eventName of ["pointerdown", "pointerup", "mousedown", "mouseup", "click", "dblclick"]) {
         root.addEventListener(eventName, (event) => event.stopPropagation());
     }
-    for (const eventName of ["keydown", "keyup", "keypress", "copy", "cut", "paste"]) {
+    for (const eventName of ["keydown", "keyup", "keypress"]) {
+        root.addEventListener(eventName, (event) => {
+            // Text fields keep native undo/redo. Elsewhere in the node, let the
+            // workflow-level shortcut reach ComfyUI instead of swallowing it.
+            if (undoDirection(event) && !isEditableEventTarget(event.target)) return;
+            event.stopPropagation();
+        });
+    }
+    for (const eventName of ["copy", "cut", "paste"]) {
         root.addEventListener(eventName, (event) => event.stopPropagation());
     }
     root.addEventListener("wheel", (event) => event.stopPropagation());
@@ -654,7 +667,9 @@ function mountEditor(node) {
 
     function writeWidget(text, event = null, message = "Saved") {
         const value = String(text ?? "");
-        state.history.record(value, {inputType:event?.inputType});
+        if (["historyUndo", "historyRedo"].includes(event?.inputType)) {
+            state.history.align(value);
+        } else state.history.record(value, {inputType:event?.inputType});
         state.lastWidgetValue = value;
         promptWidget.value = value;
         promptWidget.callback?.(value);
@@ -1068,8 +1083,8 @@ function mountEditor(node) {
         () => setRichText(!state.richText),
     );
     presentationButton.classList.toggle("h3ide-presentation-active", state.richText);
-    undoButton = button("↶", "Undo (Ctrl/Cmd+Z)", () => applyHistory("undo"));
-    redoButton = button("↷", "Redo (Ctrl/Cmd+Shift+Z)", () => applyHistory("redo"));
+    undoButton = button("↶", "Undo prompt change", () => applyHistory("undo"));
+    redoButton = button("↷", "Redo prompt change", () => applyHistory("redo"));
     const smaller = button("A−", "Decrease editor font", () => {
         state.fontSize = clampFont(state.fontSize - 1);
         node.properties[FONT_PROPERTY] = state.fontSize;
@@ -1132,11 +1147,7 @@ function mountEditor(node) {
     state.editor.addEventListener("cut", (event) => copySelection(state.editor, event, true));
     state.editor.addEventListener("keydown", (event) => {
         if (state.completion?.handleKeydown(event)) return;
-        const direction = undoDirection(event);
-        if (direction) {
-            event.preventDefault();
-            applyHistory(direction);
-        } else if (event.key === "Escape") {
+        if (event.key === "Escape") {
             state.trayOpen = false;
             node.properties[TRAY_PROPERTY] = false;
             state.tray.classList.remove("h3ide-open");
