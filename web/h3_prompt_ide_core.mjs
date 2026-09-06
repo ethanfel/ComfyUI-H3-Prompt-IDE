@@ -1,7 +1,7 @@
 import {
     H3_ALL_SECTIONS,
     H3_MINIMAX_SPECIAL_TOKENS,
-} from "./h3_prompt_schema_core.mjs?v=0.8.22";
+} from "./h3_prompt_schema_core.mjs?v=0.8.23";
 
 export const H3_EDIT_ENCODER_NODE = "TextEncodeH3Edit";
 export const H3_EDIT_OPTIONS_NODE = "H3EditOptions";
@@ -373,6 +373,11 @@ export function undoDirection(event) {
     if (key === "z") return event.shiftKey ? "redo" : "undo";
     if (key === "y" && !event.shiftKey) return "redo";
     return null;
+}
+
+export function isWorkflowSaveShortcut(event) {
+    if (!event || event.altKey || event.shiftKey || !(event.ctrlKey || event.metaKey)) return false;
+    return String(event.key ?? "").toLowerCase() === "s";
 }
 
 export class PromptUndoHistory {

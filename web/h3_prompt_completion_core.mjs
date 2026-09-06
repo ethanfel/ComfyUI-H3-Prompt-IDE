@@ -7,7 +7,7 @@ import {
     H3_VISUAL_RETENTION_MARKERS,
     effectiveH3Mode,
     h3SectionsForMode,
-} from "./h3_prompt_schema_core.mjs?v=0.8.22";
+} from "./h3_prompt_schema_core.mjs?v=0.8.23";
 
 export {H3_LANGUAGE_MARKERS};
 

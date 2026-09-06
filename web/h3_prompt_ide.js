@@ -4,22 +4,23 @@ import {
     canAutoReplaceEditInstruction,
     downstreamH3EditContext,
     editInstructionTemplate,
+    isWorkflowSaveShortcut,
     PromptUndoHistory,
     referenceFromInputName,
     tokenizePrompt,
     undoDirection,
-} from "./h3_prompt_ide_core.mjs?v=0.8.22";
+} from "./h3_prompt_ide_core.mjs?v=0.8.23";
 import {
     createPromptCompletionController,
     promptBracketReplacementQuery,
     promptRetentionReplacementQuery,
     promptTokenReplacementQuery,
-} from "./h3_prompt_completion_core.mjs?v=0.8.22";
-import {repairLegacyWidgetWidth} from "./h3_legacy_widget_width.mjs?v=0.8.22";
+} from "./h3_prompt_completion_core.mjs?v=0.8.23";
+import {repairLegacyWidgetWidth} from "./h3_legacy_widget_width.mjs?v=0.8.23";
 import {
     H3_PROMPT_IDE_SETTING_DEFINITIONS,
     h3PromptIdePreferences,
-} from "./h3_prompt_ide_settings_core.mjs?v=0.8.22";
+} from "./h3_prompt_ide_settings_core.mjs?v=0.8.23";
 import {
     analyzeH3Prompt,
     effectiveH3Mode,
@@ -27,7 +28,7 @@ import {
     H3_MODES,
     h3ModeLabel,
     insertH3Section,
-} from "./h3_prompt_schema_core.mjs?v=0.8.22";
+} from "./h3_prompt_schema_core.mjs?v=0.8.23";
 
 // Standalone adaptation of the Rich Scene Prompt Editor originally authored
 // for ethanfel/ComfyUI-MiniMaxH3-Contex-Loop. Its rich reference presentation
@@ -534,6 +535,9 @@ function mountEditor(node) {
     }
     for (const eventName of ["keydown", "keyup", "keypress"]) {
         root.addEventListener(eventName, (event) => {
+            // ComfyUI owns Ctrl/Cmd+S even while a text field is focused. Let
+            // its keybinding handler prevent the browser's Save Page action.
+            if (isWorkflowSaveShortcut(event)) return;
             // Text fields keep native undo/redo. Elsewhere in the node, let the
             // workflow-level shortcut reach ComfyUI instead of swallowing it.
             if (undoDirection(event) && !isEditableEventTarget(event.target)) return;

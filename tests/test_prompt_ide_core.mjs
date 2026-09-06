@@ -5,6 +5,7 @@ import {
     canAutoReplaceEditInstruction,
     downstreamH3EditContext,
     editInstructionTemplate,
+    isWorkflowSaveShortcut,
     pictureOrdinalFromInputName,
     pictureToken,
     PromptUndoHistory,
@@ -277,6 +278,11 @@ assert.equal(history.undo(), "a");
 assert.equal(history.redo(), "abc");
 assert.equal(undoDirection({ctrlKey: true, metaKey: false, altKey: false, shiftKey: false, key: "z"}), "undo");
 assert.equal(undoDirection({ctrlKey: true, metaKey: false, altKey: false, shiftKey: true, key: "z"}), "redo");
+assert.equal(isWorkflowSaveShortcut({ctrlKey:true, metaKey:false, altKey:false, shiftKey:false, key:"s"}), true);
+assert.equal(isWorkflowSaveShortcut({ctrlKey:false, metaKey:true, altKey:false, shiftKey:false, key:"S"}), true);
+assert.equal(isWorkflowSaveShortcut({ctrlKey:true, metaKey:false, altKey:false, shiftKey:true, key:"s"}), false);
+assert.equal(isWorkflowSaveShortcut({ctrlKey:true, metaKey:false, altKey:true, shiftKey:false, key:"s"}), false);
+assert.equal(isWorkflowSaveShortcut({ctrlKey:true, metaKey:false, altKey:false, shiftKey:false, key:"z"}), false);
 
 const source = fs.readFileSync(new URL("../web/h3_prompt_ide.js", import.meta.url), "utf8");
 assert.match(source, /createPromptCompletionController/);
@@ -313,6 +319,7 @@ assert.match(source, /getAppendCompletionSpace:\(\) => promptIdePreferences\(\)\
 assert.match(source, /if \(!promptIdePreferences\(\)\.markerReplacement\) return/);
 assert.match(source, /\["historyUndo", "historyRedo"\]\.includes\(event\?\.inputType\)/);
 assert.match(source, /undoDirection\(event\) && !isEditableEventTarget\(event\.target\)/);
+assert.match(source, /if \(isWorkflowSaveShortcut\(event\)\) return;/);
 const editorKeydownBody = source.match(
     /state\.editor\.addEventListener\("keydown", \(event\) => \{([\s\S]*?)\n    \}\);/,
 )?.[1] ?? "";
