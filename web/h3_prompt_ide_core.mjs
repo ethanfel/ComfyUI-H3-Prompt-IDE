@@ -1,7 +1,7 @@
 import {
     H3_ALL_SECTIONS,
     H3_MINIMAX_SPECIAL_TOKENS,
-} from "./h3_prompt_schema_core.mjs?v=0.8.23";
+} from "./h3_prompt_schema_core.mjs?v=0.8.24";
 
 export const H3_EDIT_ENCODER_NODE = "TextEncodeH3Edit";
 export const H3_EDIT_OPTIONS_NODE = "H3EditOptions";
@@ -378,6 +378,13 @@ export function undoDirection(event) {
 export function isWorkflowSaveShortcut(event) {
     if (!event || event.altKey || event.shiftKey || !(event.ctrlKey || event.metaKey)) return false;
     return String(event.key ?? "").toLowerCase() === "s";
+}
+
+export function isLineLeadingOffset(text, requestedOffset) {
+    const value = String(text ?? "");
+    const offset = Math.max(0, Math.min(value.length, Number(requestedOffset) || 0));
+    const lineStart = offset === 0 ? 0 : value.lastIndexOf("\n", offset - 1) + 1;
+    return /^[\t ]*$/.test(value.slice(lineStart, offset));
 }
 
 export class PromptUndoHistory {

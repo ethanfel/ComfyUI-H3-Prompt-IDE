@@ -5,6 +5,7 @@ import {
     canAutoReplaceEditInstruction,
     downstreamH3EditContext,
     editInstructionTemplate,
+    isLineLeadingOffset,
     isWorkflowSaveShortcut,
     pictureOrdinalFromInputName,
     pictureToken,
@@ -283,6 +284,10 @@ assert.equal(isWorkflowSaveShortcut({ctrlKey:false, metaKey:true, altKey:false, 
 assert.equal(isWorkflowSaveShortcut({ctrlKey:true, metaKey:false, altKey:false, shiftKey:true, key:"s"}), false);
 assert.equal(isWorkflowSaveShortcut({ctrlKey:true, metaKey:false, altKey:true, shiftKey:false, key:"s"}), false);
 assert.equal(isWorkflowSaveShortcut({ctrlKey:true, metaKey:false, altKey:false, shiftKey:false, key:"z"}), false);
+assert.equal(isLineLeadingOffset("\nsummary:", 1), true);
+assert.equal(isLineLeadingOffset("\n  <Picture 1>", 3), true);
+assert.equal(isLineLeadingOffset("text <Picture 1>", 5), false);
+assert.equal(isLineLeadingOffset("summary:", 0), true);
 
 const source = fs.readFileSync(new URL("../web/h3_prompt_ide.js", import.meta.url), "utf8");
 assert.match(source, /createPromptCompletionController/);
@@ -320,6 +325,9 @@ assert.match(source, /if \(!promptIdePreferences\(\)\.markerReplacement\) return
 assert.match(source, /\["historyUndo", "historyRedo"\]\.includes\(event\?\.inputType\)/);
 assert.match(source, /undoDirection\(event\) && !isEditableEventTarget\(event\.target\)/);
 assert.match(source, /if \(isWorkflowSaveShortcut\(event\)\) return;/);
+assert.match(source, /lineStartTokenCaretOffsetAtPoint\(state\.editor, event\)/);
+assert.match(source, /const CARET_SENTINEL = "\\u200B"/);
+assert.match(source, /isLineLeadingOffset\(text, offset\)/);
 const editorKeydownBody = source.match(
     /state\.editor\.addEventListener\("keydown", \(event\) => \{([\s\S]*?)\n    \}\);/,
 )?.[1] ?? "";
@@ -332,6 +340,10 @@ assert.match(source, /function restoreSelection/);
 assert.match(source, /focusCurrentEditor\(result\.selectionStart, result\.selectionEnd\)/);
 assert.doesNotMatch(source, /h3ide-token-retention/);
 assert.match(source, /editorPlainText\(range\.cloneContents\(\), \{trimFinalNewline:false\}\)/);
+const selectionOffsetBody = source.match(
+    /function selectionTextOffset\(editor\) \{([\s\S]*?)\n\}/,
+)?.[1] ?? "";
+assert.match(selectionOffsetBody, /trimFinalNewline:false/);
 const focusEditorBody = source.match(
     /function focusCurrentEditor\(caret = null, selectionEnd = caret\) \{([\s\S]*?)\n    \}/,
 )?.[1] ?? "";

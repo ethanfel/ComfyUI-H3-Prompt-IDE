@@ -4,23 +4,24 @@ import {
     canAutoReplaceEditInstruction,
     downstreamH3EditContext,
     editInstructionTemplate,
+    isLineLeadingOffset,
     isWorkflowSaveShortcut,
     PromptUndoHistory,
     referenceFromInputName,
     tokenizePrompt,
     undoDirection,
-} from "./h3_prompt_ide_core.mjs?v=0.8.23";
+} from "./h3_prompt_ide_core.mjs?v=0.8.24";
 import {
     createPromptCompletionController,
     promptBracketReplacementQuery,
     promptRetentionReplacementQuery,
     promptTokenReplacementQuery,
-} from "./h3_prompt_completion_core.mjs?v=0.8.23";
-import {repairLegacyWidgetWidth} from "./h3_legacy_widget_width.mjs?v=0.8.23";
+} from "./h3_prompt_completion_core.mjs?v=0.8.24";
+import {repairLegacyWidgetWidth} from "./h3_legacy_widget_width.mjs?v=0.8.24";
 import {
     H3_PROMPT_IDE_SETTING_DEFINITIONS,
     h3PromptIdePreferences,
-} from "./h3_prompt_ide_settings_core.mjs?v=0.8.23";
+} from "./h3_prompt_ide_settings_core.mjs?v=0.8.24";
 import {
     analyzeH3Prompt,
     effectiveH3Mode,
@@ -28,7 +29,7 @@ import {
     H3_MODES,
     h3ModeLabel,
     insertH3Section,
-} from "./h3_prompt_schema_core.mjs?v=0.8.23";
+} from "./h3_prompt_schema_core.mjs?v=0.8.24";
 
 // Standalone adaptation of the Rich Scene Prompt Editor originally authored
 // for ethanfel/ComfyUI-MiniMaxH3-Contex-Loop. Its rich reference presentation
@@ -48,6 +49,7 @@ const TASK_TEMPLATE_PROPERTY = "h3_prompt_ide_last_task_template";
 const DEFAULT_FONT = 17;
 const MIN_FONT = 12;
 const MAX_FONT = 32;
+const CARET_SENTINEL = "\u200B";
 const SUPPORTS_DECLARATIVE_SETTINGS = typeof app.extensionManager?.setting?.get === "function";
 
 function settingValue(id, fallback) {
@@ -365,7 +367,9 @@ function labelReferenceSockets(node) {
 
 function editorPlainText(editor, {trimFinalNewline = true} = {}) {
     function read(node, root) {
-        if (node.nodeType === Node.TEXT_NODE) return node.textContent ?? "";
+        if (node.nodeType === Node.TEXT_NODE) {
+            return (node.textContent ?? "").replaceAll(CARET_SENTINEL, "");
+        }
         if (node.nodeType === Node.DOCUMENT_FRAGMENT_NODE) {
             let text = "";
             for (const child of node.childNodes) text += read(child, root);
@@ -417,7 +421,7 @@ function selectionTextOffset(editor) {
     const range = selection.getRangeAt(0).cloneRange();
     range.selectNodeContents(editor);
     range.setEnd(selection.anchorNode, selection.anchorOffset);
-    return editorPlainText(range.cloneContents()).length;
+    return editorPlainText(range.cloneContents(), {trimFinalNewline:false}).length;
 }
 
 function nodeTextOffset(editor, node) {
@@ -439,6 +443,31 @@ function pointerTextOffset(editor, event) {
     return editorPlainText(range.cloneContents(), {trimFinalNewline:false}).length;
 }
 
+function lineStartTokenCaretOffsetAtPoint(editor, event) {
+    const x = Number(event?.clientX);
+    const y = Number(event?.clientY);
+    if (!editor || !Number.isFinite(x) || !Number.isFinite(y)) return null;
+    const text = editorPlainText(editor);
+    const editorRect = editor.getBoundingClientRect();
+    let nearest = null;
+    let nearestDistance = Number.POSITIVE_INFINITY;
+    for (const token of editor.querySelectorAll(".h3ide-token")) {
+        const offset = nodeTextOffset(editor, token);
+        if (!isLineLeadingOffset(text, offset)) continue;
+        const rect = token.getBoundingClientRect();
+        const verticalSlop = Math.min(4, rect.height * 0.2);
+        if (y < rect.top - verticalSlop || y > rect.bottom + verticalSlop) continue;
+        const leadingEdge = rect.left + Math.min(8, Math.max(4, rect.width * 0.12));
+        if (x < editorRect.left || x > leadingEdge) continue;
+        const distance = Math.abs(x - rect.left);
+        if (distance < nearestDistance) {
+            nearest = offset;
+            nearestDistance = distance;
+        }
+    }
+    return nearest;
+}
+
 function textPoint(editor, requested) {
     const target = Math.max(0, Number(requested) || 0);
     let consumed = 0;
@@ -446,9 +475,16 @@ function textPoint(editor, requested) {
     function visit(node) {
         if (point) return;
         if (node.nodeType === Node.TEXT_NODE) {
-            const length = node.textContent?.length ?? 0;
+            const raw = node.textContent ?? "";
+            const length = raw.replaceAll(CARET_SENTINEL, "").length;
             if (target <= consumed + length) {
-                point = {node, offset:Math.max(0, target - consumed)};
+                let remaining = Math.max(0, target - consumed);
+                let offset = 0;
+                while (offset < raw.length && remaining > 0) {
+                    if (raw[offset] !== CARET_SENTINEL) remaining -= 1;
+                    offset += 1;
+                }
+                point = {node, offset};
                 return;
             }
             consumed += length;
@@ -719,7 +755,16 @@ function mountEditor(node) {
 
     function renderText(text, caret = null) {
         const fragment = document.createDocumentFragment();
-        for (const part of tokenizePrompt(text, state.records)) fragment.append(makeToken(part));
+        let offset = 0;
+        for (const part of tokenizePrompt(text, state.records)) {
+            if (part.type !== "text" && isLineLeadingOffset(text, offset)) {
+                const previous = fragment.lastChild;
+                if (previous?.nodeType === Node.TEXT_NODE) previous.textContent += CARET_SENTINEL;
+                else fragment.append(document.createTextNode(CARET_SENTINEL));
+            }
+            fragment.append(makeToken(part));
+            offset += part.text.length;
+        }
         state.editor.replaceChildren(fragment);
         if (caret != null) restoreCaret(state.editor, caret);
         updateFooter();
@@ -1245,6 +1290,13 @@ function mountEditor(node) {
         },
     });
     state.editor.addEventListener("click", (event) => {
+        const lineStartCaret = lineStartTokenCaretOffsetAtPoint(state.editor, event);
+        if (lineStartCaret != null) {
+            event.preventDefault();
+            state.completion?.hide();
+            focusCurrentEditor(lineStartCaret);
+            return;
+        }
         if (!promptIdePreferences().markerReplacement) return;
         const token = event.target?.closest?.(".h3ide-token-replaceable");
         const text = editorPlainText(state.editor);
