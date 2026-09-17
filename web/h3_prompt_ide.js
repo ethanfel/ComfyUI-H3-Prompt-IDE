@@ -142,13 +142,22 @@ function injectStyles() {
       .h3ide-editor { width:100%; height:100%; min-height:300px; overflow:auto; padding:13px 14px;
         outline:none; white-space:pre-wrap; overflow-wrap:anywhere; caret-color:var(--h3ide-text);
         font:var(--h3ide-font-size)/1.58 ui-monospace,SFMono-Regular,Consolas,monospace; }
-      .h3ide-plain-editor { display:none; width:100%; height:100%; min-height:300px; resize:none;
+      .h3ide-plain-wrap { display:none; position:relative; width:100%; height:100%; min-height:300px; }
+      .h3ide-plain-backdrop { position:absolute; inset:0; overflow:hidden; padding:13px 14px;
+        white-space:pre-wrap; overflow-wrap:anywhere; scrollbar-gutter:stable;
+        color:transparent; pointer-events:none; user-select:none;
+        font:var(--h3ide-font-size)/1.58 ui-monospace,SFMono-Regular,Consolas,monospace; }
+      .h3ide-plain-backdrop mark { background:color-mix(in srgb,#4f83ff 45%,transparent);
+        color:transparent; border-radius:2px; }
+      .h3ide-plain-editor { display:block; position:relative; width:100%; height:100%; min-height:300px; resize:none;
         overflow:auto; padding:13px 14px; border:0; outline:none; color:var(--h3ide-text);
-        background:transparent; caret-color:var(--h3ide-text); white-space:pre-wrap;
+        background:transparent; caret-color:var(--h3ide-text); white-space:pre-wrap; overflow-wrap:anywhere;
+        scrollbar-gutter:stable;
         font:var(--h3ide-font-size)/1.58 ui-monospace,SFMono-Regular,Consolas,monospace; }
       .h3ide-editor-shell.h3ide-plain .h3ide-editor { display:none; }
-      .h3ide-editor-shell.h3ide-plain .h3ide-plain-editor { display:block; }
+      .h3ide-editor-shell.h3ide-plain .h3ide-plain-wrap { display:block; }
       .h3ide-editor:empty::before { content:attr(data-placeholder); color:var(--h3ide-muted); pointer-events:none; }
+      ::highlight(h3ide-multi) { background-color:color-mix(in srgb,#4f83ff 45%,transparent); }
       .h3ide-token { display:inline-flex; align-items:center; gap:3px; max-width:320px; margin:0 1px;
         padding:1px 4px 1px 2px; border:1px solid currentColor; border-radius:5px; vertical-align:1px;
         line-height:1.25; cursor:default; user-select:all; background:color-mix(in srgb,currentColor 14%,transparent); }
@@ -424,6 +433,181 @@ function selectionTextOffset(editor) {
     return editorPlainText(range.cloneContents(), {trimFinalNewline:false}).length;
 }
 
+function selectionRangeTextOffset(editor) {
+    const selection = globalThis.getSelection?.();
+    if (!selection?.rangeCount || selection.isCollapsed) return null;
+    if (!editor.contains(selection.anchorNode) || !editor.contains(selection.focusNode)) return null;
+    const anchorRange = selection.getRangeAt(0).cloneRange();
+    anchorRange.selectNodeContents(editor);
+    anchorRange.setEnd(selection.anchorNode, selection.anchorOffset);
+    const anchor = editorPlainText(anchorRange.cloneContents(), {trimFinalNewline:false}).length;
+    const focusRange = selection.getRangeAt(0).cloneRange();
+    focusRange.selectNodeContents(editor);
+    focusRange.setEnd(selection.focusNode, selection.focusOffset);
+    const focus = editorPlainText(focusRange.cloneContents(), {trimFinalNewline:false}).length;
+    return anchor <= focus ? [anchor, focus] : [focus, anchor];
+}
+
+const MULTI_WORD_CHAR = /[\p{L}\p{N}_]/u;
+
+function wordRangeAt(text, offset) {
+    const value = String(text ?? "");
+    const position = Math.max(0, Math.min(value.length, Number(offset) || 0));
+    let start = position;
+    let end = position;
+    while (start > 0 && MULTI_WORD_CHAR.test(value[start - 1])) start -= 1;
+    while (end < value.length && MULTI_WORD_CHAR.test(value[end])) end += 1;
+    return start === end ? null : [start, end];
+}
+
+function isWholeWordRange(text, start, end) {
+    const value = String(text ?? "");
+    const before = start > 0 ? value[start - 1] : "";
+    const after = end < value.length ? value[end] : "";
+    return !MULTI_WORD_CHAR.test(before) && !MULTI_WORD_CHAR.test(after);
+}
+
+function wordBoundaryBackward(text, position) {
+    const value = String(text ?? "");
+    let point = Math.max(0, Number(position) || 0);
+    while (point > 0 && /\s/.test(value[point - 1])) point -= 1;
+    if (point > 0 && MULTI_WORD_CHAR.test(value[point - 1])) {
+        while (point > 0 && MULTI_WORD_CHAR.test(value[point - 1])) point -= 1;
+    } else {
+        while (point > 0 && !MULTI_WORD_CHAR.test(value[point - 1]) && !/\s/.test(value[point - 1])) point -= 1;
+    }
+    return point;
+}
+
+function wordBoundaryForward(text, position) {
+    const value = String(text ?? "");
+    const length = value.length;
+    let point = Math.min(length, Math.max(0, Number(position) || 0));
+    while (point < length && /\s/.test(value[point])) point += 1;
+    if (point < length && MULTI_WORD_CHAR.test(value[point])) {
+        while (point < length && MULTI_WORD_CHAR.test(value[point])) point += 1;
+    } else {
+        while (point < length && !MULTI_WORD_CHAR.test(value[point]) && !/\s/.test(value[point])) point += 1;
+    }
+    return point;
+}
+
+function lineBoundsAt(text, position) {
+    const value = String(text ?? "");
+    const point = Math.max(0, Math.min(value.length, Number(position) || 0));
+    const start = value.lastIndexOf("\n", Math.max(0, point - 1)) + 1;
+    let end = value.indexOf("\n", point);
+    if (end === -1) end = value.length;
+    return [start, end];
+}
+
+function moveVertical(text, position, down) {
+    const value = String(text ?? "");
+    const [lineStart, lineEnd] = lineBoundsAt(value, position);
+    const column = position - lineStart;
+    if (!down) {
+        if (lineStart === 0) return 0;
+        const previousStart = value.lastIndexOf("\n", lineStart - 2) + 1;
+        return Math.min(previousStart + column, lineStart - 1);
+    }
+    if (lineEnd >= value.length) return value.length;
+    const nextStart = lineEnd + 1;
+    let nextEnd = value.indexOf("\n", nextStart);
+    if (nextEnd === -1) nextEnd = value.length;
+    return Math.min(nextStart + column, nextEnd);
+}
+
+function moveMultiRanges(text, ranges, key, byWord) {
+    const value = String(text ?? "");
+    const backwards = key === "ArrowLeft" || key === "ArrowUp" || key === "Home";
+    const moved = [];
+    for (const range of ranges) {
+        const expanded = range.start !== range.end;
+        // collapse any selection span to a cursor first, like VS Code:
+        // ←/↑ collapse to the left edge, →/↓ to the right edge, no extra move.
+        // the anchor stays on the far edge so the occurrence keeps its highlight
+        let position = backwards ? Math.min(range.start, range.end) : Math.max(range.start, range.end);
+        if (expanded) {
+            const far = backwards ? Math.max(range.start, range.end, range.anchor ?? 0)
+                : Math.min(range.start, range.end, range.anchor ?? value.length);
+            moved.push({start:position, end:position, anchor:far});
+            continue;
+        }
+        switch (key) {
+            case "ArrowLeft":
+                position = byWord ? wordBoundaryBackward(value, position) : Math.max(0, position - 1);
+                break;
+            case "ArrowRight":
+                position = byWord ? wordBoundaryForward(value, position) : Math.min(value.length, position + 1);
+                break;
+            case "Home":
+                position = byWord ? 0 : lineBoundsAt(value, position)[0];
+                break;
+            case "End":
+                position = byWord ? value.length : lineBoundsAt(value, position)[1];
+                break;
+            case "ArrowUp":
+                position = moveVertical(value, position, false);
+                break;
+            case "ArrowDown":
+                position = moveVertical(value, position, true);
+                break;
+        }
+        moved.push({start:position, end:position, anchor:Math.max(0, Math.min(range.anchor ?? position, value.length))});
+    }
+    const unique = [];
+    for (const range of moved.sort((a, b) => a.start - b.start)) {
+        if (!unique.length || unique[unique.length - 1].start !== range.start) unique.push(range);
+    }
+    return unique;
+}
+
+function applyMultiRanges(text, ranges, {insertion = null, direction = null} = {}) {
+    const value = String(text ?? "");
+    const replacement = insertion == null ? "" : String(insertion);
+    const inserting = insertion != null;
+    let result = "";
+    let read = 0;    // read position in the old text
+    let out = 0;     // write position in the new text
+    let caret = null;
+    const newRanges = [];
+    for (const range of [...ranges].sort((a, b) => a.start - b.start)) {
+        let start = range.start;
+        let end = range.end;
+        let anchor = Math.min(Math.max(range.anchor ?? start, 0), start);
+        if (!inserting && start === end) {
+            if (direction === "backward" && start > 0) start -= 1;
+            else if (direction === "forward" && end < value.length) end += 1;
+        }
+        result += value.slice(read, start);
+        const anchorOut = out + (anchor - read);
+        out += start - read;
+        if (inserting) result += replacement;
+        const position = out + replacement.length;
+        newRanges.push({start:position, end:position, anchor:Math.min(anchorOut, position)});
+        if (caret == null) caret = position;
+        out = position;
+        read = Math.max(end, start);
+    }
+    result += value.slice(read);
+    return {text:result, ranges:newRanges, caret};
+}
+
+function findOccurrences(text, query, wholeWord) {
+    const value = String(text ?? "");
+    const needle = String(query ?? "");
+    const results = [];
+    if (!needle) return results;
+    let index = value.indexOf(needle);
+    while (index !== -1) {
+        if (!wholeWord || isWholeWordRange(value, index, index + needle.length)) {
+            results.push([index, index + needle.length]);
+        }
+        index = value.indexOf(needle, index + needle.length);
+    }
+    return results;
+}
+
 function nodeTextOffset(editor, node) {
     const range = document.createRange();
     range.selectNodeContents(editor);
@@ -621,6 +805,8 @@ function mountEditor(node) {
             : initialPreferences.defaultRichText,
         analysis:null,
         completion:null,
+        multi:null,
+        multiRendering:false,
         pollTimer:null,
     };
     node._h3PromptIdeState = state;
@@ -680,6 +866,7 @@ function mountEditor(node) {
     }
 
     function setRichText(enabled, {focus = true, persist = true} = {}) {
+        if (state.multi) clearMultiSelection();
         const value = currentText();
         const caret = state.richText
             ? selectionTextOffset(state.editor)
@@ -754,6 +941,7 @@ function mountEditor(node) {
     }
 
     function renderText(text, caret = null) {
+        clearMultiSelection();
         const fragment = document.createDocumentFragment();
         let offset = 0;
         for (const part of tokenizePrompt(text, state.records)) {
@@ -796,6 +984,247 @@ function mountEditor(node) {
         refreshHistoryButtons();
         focusCurrentEditor(caret == null ? value.length : caret);
         dirty();
+    }
+
+    function clearMultiSelection(message) {
+        if (state.multiRendering) return;
+        state.multi = null;
+        try { globalThis.CSS?.highlights?.delete("h3ide-multi"); } catch (error) { /* unsupported */ }
+        if (state.plainBackdrop?.hasChildNodes()) state.plainBackdrop.replaceChildren();
+        if (message) updateFooter(message);
+    }
+
+    function applyMultiHighlight() {
+        const registry = globalThis.CSS?.highlights;
+        if (registry) {
+            try { registry.delete("h3ide-multi"); } catch (error) { /* unsupported */ }
+        }
+        const ranges = state.multi?.ranges;
+        if (!ranges?.length || typeof globalThis.Highlight !== "function" || !state.editor) return;
+        const highlight = new globalThis.Highlight();
+        for (const item of ranges) {
+            const anchor = item.anchor ?? item.start;
+            const start = Math.min(anchor, item.start, item.end);
+            const end = Math.max(anchor, item.start, item.end);
+            if (end <= start) continue;
+            const from = textPoint(state.editor, start);
+            const to = textPoint(state.editor, end);
+            if (!from || !to) continue;
+            const domRange = document.createRange();
+            try {
+                domRange.setStart(from.node, from.offset);
+                domRange.setEnd(to.node, to.offset);
+                highlight.add(domRange);
+            } catch (error) { /* offset inside a token; skip */ }
+        }
+        try { registry?.set("h3ide-multi", highlight); } catch (error) { /* unsupported */ }
+    }
+
+    function plainRefreshMultiBackdrop() {
+        const backdrop = state.plainBackdrop;
+        const editor = state.plainEditor;
+        if (!backdrop || !editor) return;
+        const ranges = state.multi?.ranges;
+        if (!ranges?.length) { backdrop.replaceChildren(); return; }
+        const text = editor.value;
+        const marks = ranges
+            .map((range) => ({
+                lo:Math.min(range.anchor ?? range.start, range.start, range.end),
+                hi:Math.max(range.anchor ?? range.start, range.start, range.end),
+            }))
+            .filter((mark) => mark.hi > mark.lo)
+            .sort((a, b) => a.lo - b.lo);
+        const fragment = document.createDocumentFragment();
+        let cursor = 0;
+        for (const {lo, hi} of marks) {
+            if (lo < cursor) continue;
+            fragment.append(text.slice(cursor, lo));
+            const mark = element("mark");
+            mark.textContent = text.slice(lo, hi);
+            fragment.append(mark);
+            cursor = hi;
+        }
+        fragment.append(text.slice(cursor), "\n");
+        backdrop.replaceChildren(fragment);
+        backdrop.scrollTop = editor.scrollTop;
+        backdrop.scrollLeft = editor.scrollLeft;
+    }
+
+    function addNextOccurrencePlain() {
+        const editor = state.plainEditor;
+        if (!editor) return;
+        const text = editor.value;
+        let multi = state.multi;
+        if (!multi || multi.query == null) {
+            const selectedStart = editor.selectionStart;
+            const selectedEnd = editor.selectionEnd;
+            let start;
+            let end;
+            let wholeWord;
+            if (selectedEnd > selectedStart) {
+                start = selectedStart;
+                end = selectedEnd;
+                wholeWord = isWholeWordRange(text, start, end);
+            } else {
+                const word = wordRangeAt(text, selectedStart);
+                if (!word) { updateFooter("Multi-select: place the caret on a word or select text first"); return; }
+                [start, end] = word;
+                wholeWord = true;
+            }
+            const query = text.slice(start, end);
+            if (!query || /\n/.test(query)) { updateFooter("Multi-select: the query cannot span lines"); return; }
+            multi = state.multi = {query, wholeWord, ranges:[{start, end, anchor:start}]};
+        }
+        const occurrences = findOccurrences(text, multi.query, multi.wholeWord);
+        if (!occurrences.length) { clearMultiSelection("Multi-select: no occurrences found"); return; }
+        const taken = new Set(multi.ranges.map((range) => range.start));
+        const next = occurrences.find(([start]) => !taken.has(start));
+        if (next) {
+            multi.ranges.push({start:next[0], end:next[1], anchor:next[0]});
+            multi.ranges.sort((a, b) => a.start - b.start);
+        }
+        plainRefreshMultiBackdrop();
+        const active = next ?? multi.ranges[0];
+        editor.focus();
+        editor.setSelectionRange(active.start, active.end);
+        const count = multi.ranges.length;
+        updateFooter(next
+            ? `Multi-select: ${count} of ${occurrences.length} occurrences · Ctrl/Cmd+Shift+D: next · type to edit all · Esc: cancel`
+            : `Multi-select: all ${occurrences.length} occurrences selected · type to edit all · Esc: cancel`);
+    }
+
+    function moveMultiCursorsPlain(event) {
+        const editor = state.plainEditor;
+        const multi = state.multi;
+        if (!editor || !multi?.ranges?.length) return;
+        multi.ranges = moveMultiRanges(editor.value, multi.ranges, event.key, event.ctrlKey || event.metaKey);
+        plainRefreshMultiBackdrop();
+        editor.focus();
+        editor.setSelectionRange(multi.ranges[0].start, multi.ranges[0].start);
+        updateFooter(`Multi-select: ${multi.ranges.length} cursor${multi.ranges.length === 1 ? "" : "s"} moved · type to edit all · Esc: cancel`);
+    }
+
+    function applyMultiEditPlain({insertion = null, direction = null, label = "Multi-select edit"}) {
+        const editor = state.plainEditor;
+        const multi = state.multi;
+        if (!editor || !multi?.ranges?.length) return;
+        const count = multi.ranges.length;
+        const outcome = applyMultiRanges(editor.value, multi.ranges, {insertion, direction});
+        editor.value = outcome.text;
+        state.multi = {query:null, wholeWord:false, ranges:outcome.ranges};
+        writeWidget(outcome.text, {inputType:insertion != null ? "insertText" : "deleteContentBackward"},
+            `${label} · ${count} cursor${count === 1 ? "" : "s"} · Esc: cancel`);
+        plainRefreshMultiBackdrop();
+        editor.focus();
+        editor.setSelectionRange(outcome.caret, outcome.caret);
+    }
+
+    function addNextOccurrence() {
+        if (!state.richText || !state.editor) { addNextOccurrencePlain(); return; }
+        const text = editorPlainText(state.editor);
+        let multi = state.multi;
+        if (!multi || multi.query == null) {
+            const current = selectionRangeTextOffset(state.editor);
+            let start;
+            let end;
+            let wholeWord;
+            if (current) {
+                [start, end] = current;
+                wholeWord = isWholeWordRange(text, start, end);
+            } else {
+                const caret = selectionTextOffset(state.editor);
+                const word = wordRangeAt(text, caret);
+                if (!word) { updateFooter("Multi-select: place the caret on a word or select text first"); return; }
+                [start, end] = word;
+                wholeWord = true;
+            }
+            const query = text.slice(start, end);
+            if (!query || /\n/.test(query)) {
+                updateFooter("Multi-select: the query cannot span lines");
+                return;
+            }
+            multi = state.multi = {query, wholeWord, ranges:[{start, end, anchor:start}]};
+        }
+        const occurrences = findOccurrences(text, multi.query, multi.wholeWord);
+        if (!occurrences.length) { clearMultiSelection("Multi-select: no occurrences found"); return; }
+        const taken = new Set(multi.ranges.map((range) => range.start));
+        const next = occurrences.find(([start]) => !taken.has(start));
+        if (next) {
+            multi.ranges.push({start:next[0], end:next[1], anchor:next[0]});
+            multi.ranges.sort((a, b) => a.start - b.start);
+        }
+        applyMultiHighlight();
+        const active = next ?? multi.ranges[0];
+        focusCurrentEditor(active.start, active.end);
+        const count = multi.ranges.length;
+        updateFooter(next
+            ? `Multi-select: ${count} of ${occurrences.length} occurrences · Ctrl/Cmd+Shift+D: next · type to edit all · Esc: cancel`
+            : `Multi-select: all ${occurrences.length} occurrences selected · type to edit all · Esc: cancel`);
+    }
+
+    function moveMultiCursors(event) {
+        const multi = state.multi;
+        if (!multi?.ranges?.length) return;
+        const unique = moveMultiRanges(editorPlainText(state.editor), multi.ranges, event.key, event.ctrlKey || event.metaKey);
+        multi.ranges = unique;
+        applyMultiHighlight();
+        focusCurrentEditor(unique[0].start);
+        updateFooter(`Multi-select: ${unique.length} cursor${unique.length === 1 ? "" : "s"} moved · type to edit all · Esc: cancel`);
+    }
+
+    function applyMultiEdit({insertion = null, direction = null, label = "Multi-select edit"}) {
+        const multi = state.multi;
+        if (!multi?.ranges?.length) return;
+        const count = multi.ranges.length;
+        const outcome = applyMultiRanges(editorPlainText(state.editor), multi.ranges, {insertion, direction});
+        state.multi = {query:null, wholeWord:false, ranges:outcome.ranges};
+        state.multiRendering = true;
+        try {
+            replaceEditorText(outcome.text, outcome.caret, `${label} · ${count} cursor${count === 1 ? "" : "s"} · Esc: cancel`);
+        } finally {
+            state.multiRendering = false;
+        }
+        applyMultiHighlight();
+        focusCurrentEditor(outcome.caret);
+        state.completion?.refresh();
+    }
+
+    function applyMultiBeforeInput(event) {
+        const multi = state.multi;
+        if (!multi?.ranges?.length) { clearMultiSelection(); return false; }
+        let insertion = null;
+        let direction = null;
+        let label = "Multi-select edit";
+        switch (event.inputType) {
+            case "insertText":
+            case "insertReplacementText":
+                insertion = event.data ?? "";
+                label = "Multi-select typed";
+                break;
+            case "insertParagraph":
+            case "insertLineBreak":
+                insertion = "\n";
+                label = "Multi-select line break";
+                break;
+            case "deleteContentBackward":
+                direction = "backward";
+                label = "Multi-select delete";
+                break;
+            case "deleteContentForward":
+                direction = "forward";
+                label = "Multi-select delete";
+                break;
+            case "deleteByCut":
+                direction = "none";
+                label = "Multi-select delete";
+                break;
+            default:
+                clearMultiSelection("Multi-select cancelled");
+                return false;
+        }
+        event.preventDefault();
+        applyMultiEdit({insertion, direction, label});
+        return true;
     }
 
     function insertDecorated(text, caret = null) {
@@ -1234,10 +1663,12 @@ function mountEditor(node) {
     state.editor.setAttribute("aria-multiline", "true");
     state.editor.dataset.placeholder = "Write a prompt. Use References to insert <Picture 1>, <Video 1>, or <Audio 1>.";
     state.editor.addEventListener("input", (event) => {
+        if (state.multi) clearMultiSelection();
         writeWidget(editorPlainText(state.editor), event);
         state.completion?.refresh();
     });
     state.editor.addEventListener("beforeinput", (event) => {
+        if (state.multi && applyMultiBeforeInput(event)) return;
         if (["insertParagraph", "insertLineBreak"].includes(event.inputType)) {
             event.preventDefault();
             insertPlainText(state.editor, "\n");
@@ -1245,6 +1676,10 @@ function mountEditor(node) {
     });
     state.editor.addEventListener("paste", (event) => {
         event.preventDefault();
+        if (state.multi?.ranges?.length) {
+            applyMultiEdit({insertion:event.clipboardData?.getData("text/plain") ?? "", label:"Multi-select paste"});
+            return;
+        }
         insertPlainText(state.editor, event.clipboardData?.getData("text/plain") ?? "");
         const caret = selectionTextOffset(state.editor);
         renderText(editorPlainText(state.editor), caret);
@@ -1254,6 +1689,29 @@ function mountEditor(node) {
     state.editor.addEventListener("cut", (event) => copySelection(state.editor, event, true));
     state.editor.addEventListener("keydown", (event) => {
         if (state.completion?.handleKeydown(event)) return;
+        if (state.multi?.ranges?.length
+                && ["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "Home", "End"].includes(event.key)
+                && !event.shiftKey && !event.altKey) {
+            event.preventDefault();
+            state.completion?.hide();
+            moveMultiCursors(event);
+            return;
+        }
+        if (state.multi?.ranges?.length
+                && ["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "Home", "End", "PageUp", "PageDown"].includes(event.key)) {
+            clearMultiSelection("Multi-select cancelled");
+        }
+        if ((event.ctrlKey || event.metaKey) && event.shiftKey && !event.altKey && event.code === "KeyD") {
+            event.preventDefault();
+            state.completion?.hide();
+            addNextOccurrence();
+            return;
+        }
+        if (event.key === "Escape" && state.multi) {
+            event.preventDefault();
+            clearMultiSelection("Multi-select cancelled");
+            return;
+        }
         if (event.key === "Escape") {
             state.trayOpen = false;
             node.properties[TRAY_PROPERTY] = false;
@@ -1263,17 +1721,84 @@ function mountEditor(node) {
             state.structure.classList.remove("h3ide-open");
         }
     });
-    state.editor.addEventListener("blur", () => renderText(editorPlainText(state.editor)));
+    state.editor.addEventListener("blur", () => {
+        if (state.multi) clearMultiSelection();
+        renderText(editorPlainText(state.editor));
+    });
+    state.editor.addEventListener("mousedown", () => {
+        if (state.multi) clearMultiSelection();
+    });
     state.plainEditor = element("textarea", "h3ide-plain-editor");
     state.plainEditor.value = state.lastWidgetValue;
     state.plainEditor.placeholder = "Base H3 prompt text";
     state.plainEditor.spellcheck = true;
     state.plainEditor.setAttribute("aria-label", "Base H3 prompt text");
+    state.plainEditor.addEventListener("keydown", (event) => {
+        if ((event.ctrlKey || event.metaKey) && event.shiftKey && !event.altKey && event.code === "KeyD") {
+            event.preventDefault();
+            addNextOccurrencePlain();
+            return;
+        }
+        if (!state.multi?.ranges?.length) return;
+        if (event.key === "Escape") {
+            event.preventDefault();
+            clearMultiSelection("Multi-select cancelled");
+            return;
+        }
+        if (["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "Home", "End"].includes(event.key)
+                && !event.shiftKey && !event.altKey) {
+            event.preventDefault();
+            moveMultiCursorsPlain(event);
+            return;
+        }
+        if (event.ctrlKey || event.metaKey || event.altKey || event.key === "Tab") {
+            clearMultiSelection("Multi-select cancelled");
+            return;
+        }
+        if (event.key === "Backspace" || event.key === "Delete") {
+            event.preventDefault();
+            applyMultiEditPlain({direction:event.key === "Backspace" ? "backward" : "forward", label:"Multi-select delete"});
+            return;
+        }
+        if (event.key === "Enter") {
+            event.preventDefault();
+            applyMultiEditPlain({insertion:"\n", label:"Multi-select line break"});
+            return;
+        }
+        if (event.key.length === 1) {
+            event.preventDefault();
+            applyMultiEditPlain({insertion:event.key, label:"Multi-select typed"});
+            return;
+        }
+        if (event.shiftKey) clearMultiSelection("Multi-select cancelled");
+    });
     state.plainEditor.addEventListener("input", (event) => {
+        if (state.multi) clearMultiSelection();
         writeWidget(state.plainEditor.value, event, "Base prompt saved");
     });
-    state.plainEditor.addEventListener("blur", () => updateFooter("Base prompt saved"));
-    shell.append(state.editor, state.plainEditor);
+    state.plainEditor.addEventListener("paste", (event) => {
+        if (!state.multi?.ranges?.length) return;
+        event.preventDefault();
+        applyMultiEditPlain({insertion:event.clipboardData?.getData("text/plain") ?? "", label:"Multi-select paste"});
+    });
+    state.plainEditor.addEventListener("mousedown", () => {
+        if (state.multi) clearMultiSelection();
+    });
+    state.plainEditor.addEventListener("blur", () => {
+        if (state.multi) clearMultiSelection();
+        updateFooter("Base prompt saved");
+    });
+    state.plainEditor.addEventListener("scroll", () => {
+        if (state.plainBackdrop) {
+            state.plainBackdrop.scrollTop = state.plainEditor.scrollTop;
+            state.plainBackdrop.scrollLeft = state.plainEditor.scrollLeft;
+        }
+    });
+    state.plainBackdrop = element("div", "h3ide-plain-backdrop");
+    state.plainBackdrop.setAttribute("aria-hidden", "true");
+    state.plainWrap = element("div", "h3ide-plain-wrap");
+    state.plainWrap.append(state.plainBackdrop, state.plainEditor);
+    shell.append(state.editor, state.plainWrap);
     state.completion = createPromptCompletionController({
         input:state.editor,
         getText:() => editorPlainText(state.editor),
