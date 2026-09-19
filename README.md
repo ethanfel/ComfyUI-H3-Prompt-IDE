@@ -80,9 +80,12 @@ does not offer a task template.
 
 The **H3 Prompt IDE** category in ComfyUI Settings controls the default
 Rich/Plain presentation for nodes without a saved per-node choice, automatic
-suggestions, trailing spaces after completed symbols, and marker-replacement
-interactions. Ctrl/Cmd+Space remains available when automatic suggestions are
-disabled. Native browser text undo and redo are always preserved.
+suggestions, a preferred dialogue language, trailing spaces after completed
+symbols, and marker-replacement interactions. When a preferred language is
+set, the paired `<d>[Language] …</d>` span becomes the first matching dialogue
+completion; leave it blank to keep the plain span first. Ctrl/Cmd+Space remains
+available when automatic suggestions are disabled. Native browser text undo
+and redo are always preserved.
 
 Reference associations use H3's native `<Picture 1>`, `<Video 1>`, and `<Audio 1>` naming. Audio labels must follow native presentation order: connected video soundtracks first, then standalone audio. This standalone editor intentionally does not include Motion Context `@tag` or `@@@@tag` compilation.
 

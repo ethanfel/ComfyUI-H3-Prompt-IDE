@@ -7,7 +7,7 @@ import {
     H3_VISUAL_RETENTION_MARKERS,
     effectiveH3Mode,
     h3SectionsForMode,
-} from "./h3_prompt_schema_core.mjs?v=0.8.24";
+} from "./h3_prompt_schema_core.mjs?v=0.8.25";
 
 export {H3_LANGUAGE_MARKERS};
 
@@ -229,7 +229,39 @@ function score(item, query) {
     return contained >= 0 ? 20 + contained : null;
 }
 
-function referenceItems(records) {
+export function normalizePreferredDialogueLanguage(value) {
+    let language = String(value ?? "").trim();
+    if (language.startsWith("[") && language.endsWith("]")) {
+        language = language.slice(1, -1);
+    }
+    return language.replace(/[\[\]\r\n]+/g, " ").replace(/\s+/g, " ").trim();
+}
+
+function dialogueItems(preferredDialogueLanguage) {
+    const items = [];
+    const language = normalizePreferredDialogueLanguage(preferredDialogueLanguage);
+    if (language) {
+        const marker = `[${language}]`;
+        items.push({
+            kind:"dialogue",
+            label:`${DIALOGUE_START}${marker} …${DIALOGUE_END}`,
+            insertText:`${DIALOGUE_START}${marker} ${DIALOGUE_END}`,
+            filterText:`d dialogue ${language} language`,
+            detail:`H3 dialogue span with preferred ${marker} marker`,
+            caretOffset:DIALOGUE_START.length + marker.length + 1,
+            priority:59,
+        });
+    }
+    items.push({
+        kind:"dialogue", label:"<d>…</d>",
+        insertText:`${DIALOGUE_START}${DIALOGUE_END}`,
+        filterText:"d dialogue", detail:"H3 dialogue span",
+        caretOffset:DIALOGUE_START.length, priority:60,
+    });
+    return items;
+}
+
+function referenceItems(records, preferredDialogueLanguage = "") {
     const items = [];
     for (const record of records ?? []) {
         const label = String(record?.token ?? "");
@@ -256,7 +288,7 @@ function referenceItems(records) {
             appendSpace:true, detail:"H3 reference audio label", priority:50 + index});
     }
     items.push(
-        {kind:"dialogue", label:"<d>…</d>", insertText:`${DIALOGUE_START}${DIALOGUE_END}`, filterText:"d dialogue", detail:"H3 dialogue or lyric span", caretOffset:DIALOGUE_START.length, priority:60},
+        ...dialogueItems(preferredDialogueLanguage),
         {kind:"flow", label:"<scenetrans>", insertText:"<scenetrans>", detail:"Dialogue continues across a shot transition", priority:61},
         {kind:"flow", label:CUTOFF_TOKEN, insertText:CUTOFF_TOKEN, filterText:"cutoff speech end", detail:"Tokenizer-native speech cutoff marker", priority:62},
         {kind:"dialogue", label:DIALOGUE_START, insertText:DIALOGUE_START, filterText:"d open dialogue", detail:"Open an H3 dialogue span", priority:63},
@@ -356,10 +388,12 @@ function unique(items) {
     });
 }
 
-export function promptCompletionItems(query, records = [], {text = "", mode = "auto", limit = 40} = {}) {
+export function promptCompletionItems(query, records = [], {
+    text = "", mode = "auto", limit = 40, preferredDialogueLanguage = "",
+} = {}) {
     if (!query) return [];
     let items;
-    if (query.trigger === "<") items = referenceItems(records);
+    if (query.trigger === "<") items = referenceItems(records, preferredDialogueLanguage);
     else if (query.trigger === "[") items = bracketItems();
     else if (["shot", "language", "directive"].includes(query.trigger)) {
         items = bracketItems().filter((item) => item.kind === query.trigger);
@@ -369,7 +403,10 @@ export function promptCompletionItems(query, records = [], {text = "", mode = "a
     else if (query.trigger === "retention_audio") items = retentionItems("audio");
     else if (query.trigger === "timestamp") items = timestampItems();
     else if (query.trigger === "section") items = sectionItems(text, mode);
-    else items = [...referenceItems(records), ...bracketItems(), ...speakerItems(), ...sectionItems(text, mode)];
+    else items = [
+        ...referenceItems(records, preferredDialogueLanguage),
+        ...bracketItems(), ...speakerItems(), ...sectionItems(text, mode),
+    ];
     const result = unique(items).map((item) => ({item, score:score(item, query.query)}))
         .filter((entry) => entry.score != null)
         .sort((left, right) => left.score - right.score
@@ -463,6 +500,7 @@ function caretAnchor(input) {
 export function createPromptCompletionController({
     input, getText, getCaret, getRecords = () => [], getMode = () => "auto",
     getAutomaticSuggestions = () => true, getAppendCompletionSpace = () => true,
+    getPreferredDialogueLanguage = () => "",
     replaceText, maxItems = 80,
 } = {}) {
     if (!input || typeof replaceText !== "function") return null;
@@ -548,6 +586,7 @@ export function createPromptCompletionController({
         currentQuery = query;
         currentItems = promptCompletionItems(currentQuery, getRecords(), {
             text, mode:getMode(), limit:maxItems,
+            preferredDialogueLanguage:getPreferredDialogueLanguage(),
         });
         if (selectCurrent) {
             const current = currentItems.findIndex((item) => item.insertText === query?.typed);

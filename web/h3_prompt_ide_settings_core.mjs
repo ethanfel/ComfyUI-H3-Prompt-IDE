@@ -2,6 +2,7 @@ export const H3_PROMPT_IDE_SETTING_IDS = Object.freeze({
     defaultPresentation:"H3PromptIDE.Editor.DefaultPresentation",
     automaticSuggestions:"H3PromptIDE.Completion.AutomaticSuggestions",
     appendCompletionSpace:"H3PromptIDE.Completion.AppendSpace",
+    preferredDialogueLanguage:"H3PromptIDE.Completion.PreferredDialogueLanguage",
     markerReplacement:"H3PromptIDE.Interaction.MarkerReplacement",
 });
 
@@ -35,6 +36,15 @@ export const H3_PROMPT_IDE_SETTING_DEFINITIONS = Object.freeze([
         tooltip:"Insert a trailing space after completing reference labels and other sentence-level H3 symbols.",
     }),
     Object.freeze({
+        id:H3_PROMPT_IDE_SETTING_IDS.preferredDialogueLanguage,
+        category:["H3 Prompt IDE", "Completion", "Preferred dialogue language"],
+        name:"Preferred dialogue language",
+        type:"text",
+        defaultValue:"",
+        attrs:{placeholder:"English (leave blank to disable)"},
+        tooltip:"Put a paired <d>[Language] …</d> completion first. Enter accepts it immediately; leave blank to keep the plain dialogue span first.",
+    }),
+    Object.freeze({
         id:H3_PROMPT_IDE_SETTING_IDS.markerReplacement,
         category:["H3 Prompt IDE", "Interaction", "Marker replacement"],
         name:"Enable marker replacement interactions",
@@ -61,6 +71,9 @@ export function h3PromptIdePreferences(readSetting) {
         appendCompletionSpace:readValue(
             readSetting, H3_PROMPT_IDE_SETTING_IDS.appendCompletionSpace, true,
         ) !== false,
+        preferredDialogueLanguage:String(readValue(
+            readSetting, H3_PROMPT_IDE_SETTING_IDS.preferredDialogueLanguage, "",
+        ) ?? "").trim(),
         markerReplacement:readValue(
             readSetting, H3_PROMPT_IDE_SETTING_IDS.markerReplacement, true,
         ) !== false,

@@ -22,8 +22,8 @@ import {
     h3PromptIdePreferences,
 } from "../web/h3_prompt_ide_settings_core.mjs";
 
-assert.equal(H3_PROMPT_IDE_SETTING_DEFINITIONS.length, 4);
-assert.equal(new Set(H3_PROMPT_IDE_SETTING_DEFINITIONS.map((item) => item.id)).size, 4);
+assert.equal(H3_PROMPT_IDE_SETTING_DEFINITIONS.length, 5);
+assert.equal(new Set(H3_PROMPT_IDE_SETTING_DEFINITIONS.map((item) => item.id)).size, 5);
 assert.ok(H3_PROMPT_IDE_SETTING_DEFINITIONS.every(
     (item) => item.category[0] === "H3 Prompt IDE",
 ));
@@ -31,6 +31,7 @@ assert.deepEqual(h3PromptIdePreferences(), {
     defaultRichText:true,
     automaticSuggestions:true,
     appendCompletionSpace:true,
+    preferredDialogueLanguage:"",
     markerReplacement:true,
 });
 const disabledPreferences = new Map([
@@ -45,6 +46,7 @@ assert.deepEqual(h3PromptIdePreferences(
     defaultRichText:false,
     automaticSuggestions:false,
     appendCompletionSpace:false,
+    preferredDialogueLanguage:"",
     markerReplacement:false,
 });
 
@@ -321,6 +323,7 @@ assert.match(source, /settings:PROMPT_IDE_SETTINGS/);
 assert.match(source, /settings\?\.addSetting\?\.\(setting\)/);
 assert.match(source, /getAutomaticSuggestions:\(\) => promptIdePreferences\(\)\.automaticSuggestions/);
 assert.match(source, /getAppendCompletionSpace:\(\) => promptIdePreferences\(\)\.appendCompletionSpace/);
+assert.match(source, /getPreferredDialogueLanguage:\(\) => promptIdePreferences\(\)\.preferredDialogueLanguage/);
 assert.match(source, /if \(!promptIdePreferences\(\)\.markerReplacement\) return/);
 assert.match(source, /\["historyUndo", "historyRedo"\]\.includes\(event\?\.inputType\)/);
 assert.match(source, /undoDirection\(event\) && !isEditableEventTarget\(event\.target\)/);

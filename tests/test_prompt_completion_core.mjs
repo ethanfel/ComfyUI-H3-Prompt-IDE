@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import {
     applyPromptCompletion,
+    normalizePreferredDialogueLanguage,
     promptBracketReplacementQuery,
     promptCompletionItems,
     promptCompletionQuery,
@@ -20,6 +21,11 @@ const records = [
     {kind:"video", token:"<Video 1>", ordinal:1},
     {kind:"audio", token:"<Audio 1>", ordinal:1},
 ];
+
+assert.equal(normalizePreferredDialogueLanguage(" English "), "English");
+assert.equal(normalizePreferredDialogueLanguage(" [French] "), "French");
+assert.equal(normalizePreferredDialogueLanguage("[Brazilian   Portuguese]"), "Brazilian Portuguese");
+assert.equal(normalizePreferredDialogueLanguage("[]"), "");
 
 assert.equal(promptCompletionQuery("Use @hero", 9), null);
 assert.equal(promptCompletionQuery("Use <Pic", 8).trigger, "<");
@@ -290,7 +296,22 @@ assert.deepEqual(applyPromptCompletion("subject_def", promptCompletionQuery("sub
 
 const dialogue = promptCompletionItems(promptCompletionQuery("<d", 2), records)[0];
 assert.equal(dialogue.insertText, "<d></d>");
+assert.equal(dialogue.detail, "H3 dialogue span");
 assert.equal(applyPromptCompletion("<d", promptCompletionQuery("<d", 2), dialogue).caret, 3);
+
+const preferredDialogue = promptCompletionItems(
+    promptCompletionQuery("<d", 2), records,
+    {preferredDialogueLanguage:"[English]"},
+);
+assert.deepEqual(preferredDialogue.slice(0, 2).map((item) => item.insertText), [
+    "<d>[English] </d>",
+    "<d></d>",
+]);
+assert.equal(preferredDialogue[0].label, "<d>[English] …</d>");
+assert.equal(
+    applyPromptCompletion("<d", promptCompletionQuery("<d", 2), preferredDialogue[0]).caret,
+    "<d>[English] ".length,
+);
 
 const manual = promptCompletionItems(
     promptCompletionQuery("", 0, {manual:true}), records,
