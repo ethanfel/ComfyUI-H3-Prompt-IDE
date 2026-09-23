@@ -122,3 +122,24 @@ by **pekkAi-dev**.
 ## License
 
 [GNU GPL v3](LICENSE)
+
+
+### Embedding the editor
+
+Other local extensions can mount the same editor in a dialog or inspector.
+After ComfyUI loads extensions, detect the versioned API without importing and
+registering the main extension again:
+
+```js
+const createEmbeddedPromptEditor = globalThis[Symbol.for("H3PromptIDE.embeddedEditor.v1")];
+const editor = createEmbeddedPromptEditor(container, {
+    value: promptText,
+    onChange: text => markDirty(text),
+    references: [{kind: "picture", ordinal: 1, token: "<Picture 1>", preview: imageUrl}],
+});
+// Read editor.getValue() when saving; call editor.destroy() when closing.
+```
+
+The host owns file persistence. `setValue(text)` and `setReferences(records)`
+refresh the editor without creating graph nodes. Consumers should detect this
+optional API and offer a basic text editor when it is unavailable.

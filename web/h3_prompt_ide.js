@@ -334,6 +334,8 @@ function findImagePreview(start) {
 }
 
 function referenceRecords(editorNode) {
+    if (editorNode._h3PromptIdeExternalReferences) return editorNode._h3PromptIdeExternalReferences;
+
     const container = referencesNode(editorNode);
     if (!container) return [];
     const records = [];
@@ -354,6 +356,8 @@ function referenceRecords(editorNode) {
 }
 
 function referenceSignature(editorNode) {
+    if (editorNode._h3PromptIdeExternalReferences) return JSON.stringify(editorNode._h3PromptIdeExternalReferences);
+
     const container = referencesNode(editorNode);
     if (!container) return "";
     return (container.inputs ?? []).map((input) => {
@@ -1249,7 +1253,7 @@ function mountEditor(node) {
 
     function renderTray() {
         state.tray.replaceChildren();
-        if (!referencesNode(node)) {
+        if (!referencesNode(node) && !node._h3PromptIdeExternalReferences) {
             state.tray.append(element(
                 "div", "h3ide-ref-help",
                 "Connect an H3 Reference Inputs node to use picture, video, and audio tokens.",
@@ -1477,7 +1481,7 @@ function mountEditor(node) {
         const health = state.analysis?.valid
             ? mode === "edit" ? "instruction valid" : "schema valid"
             : `${state.analysis?.problems.filter((item) => item.severity === "error").length ?? 0} errors`;
-        const references = referencesNode(node)
+        const references = (referencesNode(node) || node._h3PromptIdeExternalReferences)
             ? ["picture", "video", "audio"].map((kind) => {
                 const count = state.records.filter((item) => item.kind === kind).length;
                 return count ? `${count} ${kind}${count === 1 ? "" : "s"}` : null;
@@ -1971,3 +1975,48 @@ app.registerExtension({
         }
     },
 });
+
+
+/** Mount the same H3 editor outside the graph (catalogues, inspectors, dialogs).
+ * Consumers own persistence. Call destroy() when the host closes.
+ * References use {kind, ordinal, token, preview?, source?: {title}} records.
+ */
+export function createEmbeddedPromptEditor(container, {value = "", onChange, references = [], properties = {}} = {}) {
+    if (!(container instanceof HTMLElement)) throw new TypeError("An editor container is required.");
+    const widget = {name: "prompt", value: String(value), callback: text => onChange?.(text)};
+    let root;
+    const host = {
+        widgets: [widget], properties: {...properties}, inputs: [], outputs: [],
+        _h3PromptIdeExternalReferences: references,
+        addDOMWidget(name, type, element) {
+            root = element;
+            container.append(element);
+            return {name, type, element};
+        },
+    };
+    try { mountEditor(host); }
+    catch (error) { host.onRemoved?.(); root?.remove(); throw error; }
+    let destroyed = false;
+    return {
+        getValue: () => String(widget.value),
+        setValue(text) {
+            if (destroyed) return;
+            widget.value = String(text);
+            host._h3PromptIdeRefresh?.();
+        },
+        setReferences(records) {
+            if (destroyed) return;
+            host._h3PromptIdeExternalReferences = records;
+            host._h3PromptIdeRefresh?.();
+        },
+        destroy() {
+            if (destroyed) return;
+            destroyed = true;
+            host.onRemoved?.();
+            root?.remove();
+        },
+    };
+}
+
+// Shared with optional consumers regardless of ComfyUI extension cache-busting URLs.
+globalThis[Symbol.for("H3PromptIDE.embeddedEditor.v1")] = createEmbeddedPromptEditor;
